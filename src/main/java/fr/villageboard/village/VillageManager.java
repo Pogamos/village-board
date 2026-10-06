@@ -10,6 +10,7 @@ import fr.villageboard.item.ContractKind;
 import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BorderView;
 import fr.villageboard.net.Payloads;
+import fr.villageboard.net.VillagerCard;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -478,6 +479,39 @@ public final class VillageManager {
 			return;
 		}
 		ServerPlayNetworking.send(player, new Payloads.OpenBoard(view(v, player)));
+	}
+
+	/** Fiche résumée envoyée à l'ouverture des échanges avec un villageois (appelé par le mixin). */
+	public void sendTradeCard(ServerPlayer player, Villager villager) {
+		if (!ServerPlayNetworking.canSend(player, VillagerCard.TYPE)) {
+			return;
+		}
+		VillagerRecord r = observe(villager, true);
+		Village village = index.get(villager.getUUID());
+		UUID uuid = villager.getUUID();
+		BlockPos home = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).map(GlobalPos::pos).orElse(null);
+		int couple = 0;
+		String partner = "";
+		List<String> parents = List.of();
+		Kin k = genealogy.get(uuid);
+		if (k != null) {
+			if (k.spouse != null) {
+				couple = 1;
+				Kin s = genealogy.get(UUID.fromString(k.spouse));
+				partner = s == null ? "" : s.name;
+			} else if (!k.widowed.isEmpty()) {
+				couple = 2;
+				Kin s = genealogy.get(UUID.fromString(k.widowed.getLast()));
+				partner = s == null ? "" : s.name;
+			}
+			parents = k.parents.stream().map(p -> genealogy.get(UUID.fromString(p))).map(p -> p == null ? "" : p.name).toList();
+		}
+		ServerPlayNetworking.send(player, new VillagerCard(uuid, displayName(villager), Professions.key(villager),
+				Professions.type(villager), villager.getVillagerData().level(), villager.getHealth(), villager.getMaxHealth(),
+				village == null ? "" : village.name, home, villager.hasAttached(Attachments.BOUND_HOME),
+				memory(villager, MemoryModuleType.JOB_SITE), villager.hasAttached(Attachments.BOUND_SITE), isLocked(villager),
+				r == null ? -1 : r.firstSeenDay, r != null && r.born, couple, partner, parents,
+				genealogy.childCount(uuid), genealogy.siblingCount(uuid)));
 	}
 
 	private BoardView view(Village v, ServerPlayer player) {

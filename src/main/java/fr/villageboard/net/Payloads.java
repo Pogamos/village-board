@@ -68,6 +68,7 @@ public final class Payloads {
 	public static void init() {
 		PayloadTypeRegistry.clientboundPlay().register(OpenBoard.TYPE, OpenBoard.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(Borders.TYPE, Borders.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(VillagerCard.TYPE, VillagerCard.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(BoardAction.TYPE, BoardAction.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(BoardAction.TYPE, (payload, context) ->

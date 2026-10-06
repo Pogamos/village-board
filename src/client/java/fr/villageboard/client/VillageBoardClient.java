@@ -22,5 +22,6 @@ public class VillageBoardClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(Payloads.Borders.TYPE, (payload, context) ->
 				context.client().execute(() -> BorderDisplay.setBorders(payload.borders())));
 		ClientTickEvents.END_CLIENT_TICK.register(BorderDisplay::tick);
+		TradeCard.init();
 	}
 }

@@ -318,5 +318,9 @@
   "villageboard.gui.married_to": "Conjoint : %s (depuis le jour %s)",
   "villageboard.gui.divorce": "[divorcer]",
   "villageboard.gui.divorce.confirm": "[confirmer le divorce]",
-  "villageboard.gui.single": "Célibataire"
+  "villageboard.gui.single": "Célibataire",
+  "villageboard.card.no_village": "Hors de tout village",
+  "villageboard.card.village": "Village : %s",
+  "villageboard.card.homeless": "Sans abri",
+  "villageboard.card.kin": "Enfants : %s · Fratrie : %s"
 }

@@ -66,7 +66,8 @@ Pièges déjà rencontrés en 26.2 :
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
   `FamilyTree` (arbre d'un villageois), `VillageTree` (onglet Familles : arbre de tout le village, zoom et déplacement),
-  `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
+  `TradeCard` (fiche à côté de la fenêtre de commerce : le mixin sur `Villager.startTrading` fait envoyer `net/VillagerCard`,
+  dessinée via `ScreenEvents.afterExtract` du `MerchantScreen`), `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
   `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
 - Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
 - La gazette stocke un **type + des arguments**, jamais du texte : le client compose la phrase dans sa langue (`Texts.news`).

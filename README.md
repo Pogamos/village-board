@@ -42,6 +42,12 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   son statut **et** son logement sont cochés : décocher « Logés » ne laisse voir que les sans-abri, qui ont un contour orange.
   Les filtres sont gardés tant que le jeu tourne.
 
+### Fiche au commerce
+Quand on ouvre les échanges d'un villageois (clic droit), une petite fiche s'affiche à côté de la fenêtre de commerce :
+sa tête, son nom, son métier et son niveau, sa santé, son village, son lit et son poste (en doré s'ils sont attitrés),
+le verrou, son conjoint, ses parents, ses enfants, ses frères et sœurs, et depuis quand il est au village. Elle se place
+à gauche de la fenêtre, à droite s'il manque de place ; si l'écran est trop étroit (grande échelle d'interface), elle n'apparaît pas.
+
 ### Généalogie
 Le mod tient un **état civil** : à chaque naissance, il note les deux parents. Ces entrées sont gardées après la mort ou
 le départ des villageois. Dans la fiche, la ligne **Famille** compte les parents, frères et sœurs (demi-frères et

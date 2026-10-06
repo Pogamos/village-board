@@ -3,6 +3,8 @@ package fr.villageboard.mixin;
 import fr.villageboard.village.Professions;
 import fr.villageboard.village.VillageManager;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerData;
@@ -76,6 +78,14 @@ public abstract class VillagerMixin {
 		if (cir.getReturnValueZ() && asking != null && asking != self && VillageManager.get() != null
 				&& !VillageManager.get().mayBreed(asking, self)) {
 			cir.setReturnValue(false);
+		}
+	}
+
+	/** Ouverture des échanges : le client reçoit une petite fiche du villageois, affichée à côté du commerce. */
+	@Inject(method = "startTrading", at = @At("TAIL"))
+	private void villageboard$onStartTrading(Player player, CallbackInfo ci) {
+		if (player instanceof ServerPlayer serverPlayer && VillageManager.get() != null) {
+			VillageManager.get().sendTradeCard(serverPlayer, (Villager) (Object) this);
 		}
 	}
 

@@ -189,6 +189,23 @@ final class Genealogy {
 		return k == null || k.spouse == null ? null : UUID.fromString(k.spouse);
 	}
 
+	/** Nombre d'enfants connus. */
+	int childCount(UUID uuid) {
+		String key = uuid.toString();
+		return (int) entries.values().stream().filter(k -> k.parents.contains(key)).count();
+	}
+
+	/** Nombre de frères et sœurs connus (demi-frères et demi-sœurs compris). */
+	int siblingCount(UUID uuid) {
+		Kin me = get(uuid);
+		if (me == null || me.parents.isEmpty()) {
+			return 0;
+		}
+		return (int) entries.values().stream()
+				.filter(k -> k != me && k.parents.stream().anyMatch(me.parents::contains))
+				.count();
+	}
+
 	/** Parent et enfant, ou frères et sœurs (au moins un parent commun). */
 	boolean related(UUID a, UUID b) {
 		Kin ka = get(a);

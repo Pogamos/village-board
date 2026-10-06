@@ -304,5 +304,9 @@
   "villageboard.gui.married_to": "Spouse: %s (since day %s)",
   "villageboard.gui.divorce": "[divorce]",
   "villageboard.gui.divorce.confirm": "[confirm divorce]",
-  "villageboard.gui.single": "Single"
+  "villageboard.gui.single": "Single",
+  "villageboard.card.no_village": "Outside any village",
+  "villageboard.card.village": "Village: %s",
+  "villageboard.card.homeless": "Homeless",
+  "villageboard.card.kin": "Children: %s · Siblings: %s"
 }
