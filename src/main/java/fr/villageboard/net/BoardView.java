@@ -1,5 +1,6 @@
 package fr.villageboard.net;
 
+import fr.villageboard.village.Kin;
 import fr.villageboard.village.NewsEntry;
 import fr.villageboard.village.NewsType;
 import net.minecraft.core.BlockPos;
@@ -23,7 +24,33 @@ public record BoardView(
 		List<BedView> beds,
 		List<WorkstationView> workstations,
 		int bells,
-		int golems) {
+		int golems,
+		List<KinView> family) {
+
+	/**
+	 * Entrée de l'état civil : habitants, anciens habitants et leur parenté. {@code village} = nom du village où il vit
+	 * désormais, ou vide s'il est (ou était) de ce village.
+	 */
+	public record KinView(UUID uuid, String name, String profession, boolean baby, List<UUID> parents, long born,
+			Kin.Fate fate, long fateDay, String village) {
+
+		void write(FriendlyByteBuf buf) {
+			buf.writeUUID(uuid);
+			buf.writeUtf(name);
+			buf.writeUtf(profession);
+			buf.writeBoolean(baby);
+			buf.writeCollection(parents, (b, p) -> b.writeUUID(p));
+			buf.writeVarLong(born + 1);
+			buf.writeEnum(fate);
+			buf.writeVarLong(fateDay);
+			buf.writeUtf(village);
+		}
+
+		static KinView read(FriendlyByteBuf buf) {
+			return new KinView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readBoolean(), buf.readList(b -> b.readUUID()),
+					buf.readVarLong() - 1, buf.readEnum(Kin.Fate.class), buf.readVarLong(), buf.readUtf());
+		}
+	}
 
 	/** Un lit du territoire (position de la tête du lit). Son occupant se déduit du champ {@code home} des villageois. */
 	public record BedView(BlockPos pos, boolean occupied) {
@@ -122,6 +149,7 @@ public record BoardView(
 		});
 		buf.writeVarInt(bells);
 		buf.writeVarInt(golems);
+		buf.writeCollection(family, (b, k) -> k.write(b));
 	}
 
 	static BoardView read(FriendlyByteBuf buf) {
@@ -133,6 +161,7 @@ public record BoardView(
 				buf.readList(b -> new BedView(b.readBlockPos(), b.readBoolean())),
 				buf.readList(b -> new WorkstationView(b.readBlockPos(), b.readUtf(), b.readBoolean())),
 				buf.readVarInt(),
-				buf.readVarInt());
+				buf.readVarInt(),
+				buf.readList(KinView::read));
 	}
 }

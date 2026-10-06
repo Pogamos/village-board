@@ -76,7 +76,8 @@ public final class VillageManager {
 	/** Village auquel appartient chaque villageois recensé. */
 	private final Map<UUID, Village> index = new HashMap<>();
 	/** Parents d'un bébé, entre sa création et son apparition dans le monde. */
-	private final Map<UUID, String> pendingParents = new HashMap<>();
+	private final Map<UUID, Pending> pendingParents = new HashMap<>();
+	private final Genealogy genealogy;
 	private final VillagerActions actions;
 	private final Assignments assignments;
 	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
@@ -86,6 +87,7 @@ public final class VillageManager {
 	private VillageManager(MinecraftServer server) {
 		this.server = server;
 		this.file = server.getWorldPath(LevelResource.ROOT).resolve("villageboard").resolve("villages.json");
+		this.genealogy = new Genealogy(file.resolveSibling("family.json"));
 		this.actions = new VillagerActions(this, server);
 		this.assignments = new Assignments(this, server);
 	}
@@ -110,6 +112,7 @@ public final class VillageManager {
 	// ------------------------------------------------------------------ persistance
 
 	private void load() {
+		genealogy.load();
 		if (!Files.exists(file)) {
 			return;
 		}
@@ -119,8 +122,11 @@ public final class VillageManager {
 				villages.putAll(data);
 				for (Village v : villages.values()) {
 					v.villagers.keySet().forEach(uuid -> index.put(UUID.fromString(uuid), v));
+					// Type d'actualité inconnu de cette version (écrit par une autre version du mod) : ignoré.
+					v.news.removeIf(n -> n == null || n.type() == null);
 				}
 			}
+			genealogy.migrate(villages.values());
 			VillageBoard.LOGGER.info("{} village(s) chargé(s)", villages.size());
 		} catch (IOException | RuntimeException e) {
 			VillageBoard.LOGGER.error("Impossible de lire {}", file, e);
@@ -128,6 +134,7 @@ public final class VillageManager {
 	}
 
 	void save(boolean force) {
+		genealogy.save(force);
 		if (!force && villages.values().stream().noneMatch(v -> v.dirty)) {
 			return;
 		}
@@ -194,7 +201,7 @@ public final class VillageManager {
 		String dimension = dim(level);
 		long key = pos.asLong();
 		for (Village v : villages.values()) {
-			if (v.board == key && v.dimension.equals(dimension)) {
+			if (v.board == key && !v.boardMissing && v.dimension.equals(dimension)) {
 				return v;
 			}
 		}
@@ -242,19 +249,66 @@ public final class VillageManager {
 
 	// ------------------------------------------------------------------ tableau & bornes
 
+	/**
+	 * Peut-on poser un tableau ici ? Non sur le territoire d'un village qui a déjà son tableau. Sur le territoire d'un
+	 * village sans tableau (ou près de ses bornes), le tableau s'y rattache : il faut alors avoir le droit de le gérer.
+	 */
 	public boolean canFound(ServerLevel level, BlockPos pos, Player player) {
-		Village other = villageAt(dim(level), pos.getX() + 0.5, pos.getZ() + 0.5);
-		if (other != null) {
-			if (player instanceof ServerPlayer serverPlayer) {
-				serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.inside_territory", other.name));
+		String dimension = dim(level);
+		ServerPlayer serverPlayer = player instanceof ServerPlayer p ? p : null;
+		for (Village other : villages.values()) {
+			if (!other.boardMissing && other.contains(dimension, pos.getX() + 0.5, pos.getZ() + 0.5, config.defaultRadius)) {
+				if (serverPlayer != null) {
+					serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.inside_territory", other.name));
+				}
+				return false;
 			}
+		}
+		Village orphan = orphanFor(level, pos);
+		if (orphan != null && serverPlayer != null && !canManage(serverPlayer, orphan)) {
+			serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.no_permission"));
 			return false;
 		}
 		return true;
 	}
 
+	/**
+	 * Village sans tableau auquel un tableau posé ici se rattache : celui dont le territoire contient ce point, ou dont
+	 * toutes les bornes sont à moins de {@code maxBorneDistance} blocs ; le plus proche de son ancien tableau.
+	 */
+	private Village orphanFor(Level level, BlockPos pos) {
+		String dimension = dim(level);
+		double x = pos.getX() + 0.5;
+		double z = pos.getZ() + 0.5;
+		double maxSq = (double) config.maxBorneDistance * config.maxBorneDistance;
+		Village best = null;
+		double bestDist = Double.POSITIVE_INFINITY;
+		for (Village v : villages.values()) {
+			if (!v.boardMissing || !v.dimension.equals(dimension)) {
+				continue;
+			}
+			boolean near = v.contains(dimension, x, z, config.defaultRadius)
+					|| !v.bornes.isEmpty() && v.bornes.stream().map(BlockPos::of).allMatch(b -> {
+						double dx = b.getX() + 0.5 - x;
+						double dz = b.getZ() + 0.5 - z;
+						return dx * dx + dz * dz <= maxSq;
+					});
+			double d = v.boardPos().distToCenterSqr(x, v.boardPos().getY(), z);
+			if (near && d < bestDist) {
+				best = v;
+				bestDist = d;
+			}
+		}
+		return best;
+	}
+
 	public void found(ServerLevel level, BlockPos pos, LivingEntity placer, ItemStack stack) {
 		if (boardAt(level, pos) != null) {
+			return;
+		}
+		Village orphan = orphanFor(level, pos);
+		if (orphan != null) {
+			rebind(orphan, pos, placer);
 			return;
 		}
 		Village v = new Village();
@@ -280,6 +334,38 @@ public final class VillageManager {
 		if (placer instanceof ServerPlayer player) {
 			player.sendSystemMessage(Component.translatable("villageboard.msg.founded",
 					v.name, v.villagers.size(), config.defaultRadius));
+		}
+	}
+
+	/** Un tableau reposé rattache le village sans tableau, avec ses bornes, ses habitants et sa gazette. */
+	private void rebind(Village v, BlockPos pos, LivingEntity placer) {
+		v.board = pos.asLong();
+		v.boardMissing = false;
+		v.bornesChanged();
+		news(v, NewsType.BOARD_MOVED, pos.getX() + ", " + pos.getY() + ", " + pos.getZ());
+		save(true);
+		broadcastBorders();
+		if (placer instanceof ServerPlayer player) {
+			player.sendSystemMessage(Component.translatable("villageboard.msg.board_rebound",
+					v.name, v.bornes.size(), v.villagers.size()));
+			if (v.bornes.size() >= 3 && !v.contains(v.dimension, pos.getX() + 0.5, pos.getZ() + 0.5, config.defaultRadius)) {
+				message(player, Component.translatable("villageboard.msg.board_outside"));
+			}
+		}
+	}
+
+	/** Le tableau a disparu (cassé par un joueur, /setblock…) : le village est conservé, en attente d'un nouveau tableau. */
+	void boardRemoved(Village v, ServerPlayer by) {
+		if (v.boardMissing) {
+			return;
+		}
+		v.boardMissing = true;
+		v.dirty = true;
+		news(v, NewsType.BOARD_REMOVED, by == null ? "" : by.getPlainTextName());
+		save(true);
+		broadcastBorders();
+		if (by != null) {
+			by.sendSystemMessage(Component.translatable("villageboard.msg.board_removed", v.name, v.id));
 		}
 	}
 
@@ -343,8 +429,7 @@ public final class VillageManager {
 	void afterBreak(Level level, Player player, BlockPos pos) {
 		Village board = boardAt(level, pos);
 		if (board != null) {
-			dissolve(board);
-			message(player instanceof ServerPlayer p ? p : null, Component.translatable("villageboard.msg.dissolved", board.name));
+			boardRemoved(board, player instanceof ServerPlayer p ? p : null);
 			return;
 		}
 		Village borne = villageOfBorne(level, pos);
@@ -409,9 +494,16 @@ public final class VillageManager {
 		List<BoardView.WorkstationView> workstations = Facilities.workstations(v).stream()
 				.map(w -> new BoardView.WorkstationView(w.pos(), w.profession(), w.occupied()))
 				.toList();
+		List<BoardView.KinView> family = new ArrayList<>();
+		genealogy.forVillage(v.id, v.villagers.keySet()).forEach((uuid, k) -> {
+			Village elsewhere = k.village == null || k.village.equals(v.id) ? null : villages.get(k.village);
+			family.add(new BoardView.KinView(UUID.fromString(uuid), k.name, k.profession, k.baby,
+					k.parents.stream().map(UUID::fromString).toList(), k.born, k.fate, k.fateDay,
+					elsewhere == null ? "" : elsewhere.name));
+		});
 		return new BoardView(v.id, v.name, currentDay(), canManage(player, v), v.founderName, v.boardPos(),
 				config.defaultRadius, v.polygon(), List.copyOf(v.news), list, beds, workstations,
-				Facilities.bells(v), v.golems);
+				Facilities.bells(v), v.golems, family);
 	}
 
 	private static BlockPos memory(Villager villager, MemoryModuleType<GlobalPos> type) {
@@ -471,6 +563,7 @@ public final class VillageManager {
 					}
 					case FORGET -> {
 						if (r != null && live == null) {
+							genealogy.fate(action.target(), Kin.Fate.MISSING, currentDay());
 							forget(action.target());
 						}
 					}
@@ -548,6 +641,7 @@ public final class VillageManager {
 				observe(villager, true);
 			}
 			validateBornes(level, dimension);
+			validateBoards(level, dimension);
 			for (Village v : villages.values()) {
 				if (v.dimension.equals(dimension)) {
 					updateFacilities(level, v);
@@ -572,6 +666,17 @@ public final class VillageManager {
 				news(v, NewsType.HOUSING_FULL, String.valueOf(beds.size()));
 			} else {
 				news(v, NewsType.HOUSING_FREE, String.valueOf(free));
+			}
+		}
+	}
+
+	/** Tableaux disparus sans qu'un joueur les casse (/setblock, autre mod…). */
+	private void validateBoards(ServerLevel level, String dimension) {
+		for (Village v : List.copyOf(villages.values())) {
+			BlockPos pos = v.boardPos();
+			if (!v.boardMissing && v.dimension.equals(dimension) && level.isLoaded(pos)
+					&& !level.getBlockState(pos).is(ModBlocks.TOWN_BOARD)) {
+				boardRemoved(v, null);
 			}
 		}
 	}
@@ -637,6 +742,7 @@ public final class VillageManager {
 					&& System.currentTimeMillis() - r.outsideSince >= config.leaveDelaySeconds * 1000L) {
 				refresh(r, villager);
 				news(current, NewsType.LEFT, r.displayName(), r.baby ? "child" : r.profession);
+				genealogy.fate(uuid, Kin.Fate.LEFT, currentDay());
 				forget(uuid);
 				return null;
 			}
@@ -680,6 +786,7 @@ public final class VillageManager {
 		Village v = index.get(villager.getUUID());
 		if (v != null) {
 			v.dirty = true;
+			genealogy.update(r, v.id);
 		}
 	}
 
@@ -718,31 +825,40 @@ public final class VillageManager {
 
 	// ------------------------------------------------------------------ événements de jeu
 
-	/** Naissance : on note les parents qui portent un nom (les autres restent anonymes). */
+	/** Parents d'un bébé : leurs noms pour la gazette (les anonymes ne sont pas cités) et leurs UUID pour l'état civil. */
+	private record Pending(String names, List<UUID> parents) {
+	}
+
+	/** Naissance : on note les parents, pour la gazette et l'état civil. */
 	public void onBreed(Villager child, Villager parent, Villager partner) {
 		if (pendingParents.size() > 64) {
 			pendingParents.clear();
 		}
-		String parents = Stream.of(displayName(parent), displayName(partner))
+		String names = Stream.of(displayName(parent), displayName(partner))
 				.filter(n -> !n.isEmpty())
 				.collect(Collectors.joining(" & "));
-		pendingParents.put(child.getUUID(), parents);
+		for (Villager p : List.of(parent, partner)) {
+			Village home = index.get(p.getUUID());
+			genealogy.noteParent(p.getUUID(), displayName(p), Professions.key(p), p.isBaby(), home == null ? null : home.id);
+		}
+		pendingParents.put(child.getUUID(), new Pending(names, List.of(parent.getUUID(), partner.getUUID())));
 	}
 
 	void onEntityLoad(Villager villager) {
-		String parents = pendingParents.remove(villager.getUUID());
-		if (parents == null) {
+		Pending pending = pendingParents.remove(villager.getUUID());
+		if (pending == null) {
 			observe(villager, true);
 			return;
 		}
 		Village village = villageAt(dim(villager.level()), villager.getX(), villager.getZ());
+		genealogy.birth(villager.getUUID(), pending.parents(), displayName(villager), village == null ? null : village.id, currentDay());
 		if (village == null || index.containsKey(villager.getUUID())) {
 			return;
 		}
 		VillagerRecord r = register(village, villager);
 		r.born = true;
-		r.parents = parents;
-		news(village, NewsType.BIRTH, r.displayName(), parents);
+		r.parents = pending.names();
+		news(village, NewsType.BIRTH, r.displayName(), pending.names());
 	}
 
 	void onEntityUnload(Villager villager) {
@@ -754,6 +870,7 @@ public final class VillageManager {
 
 	void onDeath(Villager villager, DamageSource source) {
 		VillagerRecord r = observe(villager, false);
+		genealogy.fate(villager.getUUID(), Kin.Fate.DEAD, currentDay());
 		if (r == null) {
 			return;
 		}
@@ -763,6 +880,7 @@ public final class VillageManager {
 	}
 
 	void onConvertedFrom(Villager villager, EntityType<?> into) {
+		genealogy.fate(villager.getUUID(), into == EntityTypes.WITCH ? Kin.Fate.WITCH : Kin.Fate.ZOMBIFIED, currentDay());
 		Village village = index.containsKey(villager.getUUID())
 				? index.get(villager.getUUID())
 				: villageAt(dim(villager.level()), villager.getX(), villager.getZ());

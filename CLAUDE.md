@@ -50,11 +50,17 @@ Pièges déjà rencontrés en 26.2 :
     les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu. `VillagerActions` : renommer, localiser, verrou, réinitialisation.
   - `village/Territory` : géométrie partagée client/serveur. Polygone des bornes trié par angle autour du barycentre ;
     cercle provisoire avec moins de 3 bornes.
+  - `village/Genealogy` + `Kin` : état civil global (`<monde>/villageboard/family.json`) : parents (UUID), naissance,
+    devenir (`Kin.Fate` : mort, parti, zombifié…). Une entrée par naissance et par parent, jamais effacée. Le tableau ne reçoit que
+    la parenté des habitants du village sur 2 générations (`forVillage`). L'arbre est dessiné côté client par `FamilyTree`.
+    Attention à l'ordre : `refresh` remet le devenir à ALIVE, donc il faut noter la mort ou le départ **après** le dernier `observe`/`refresh`.
+  - Tableau retiré (cassé ou disparu, vu par `validateBoards`) : `Village.boardMissing`, le village est conservé. Un tableau
+    posé sur son territoire ou près de toutes ses bornes s'y rattache (`orphanFor`, `rebind`). Seul `/villageboard remove` dissout.
   - `mixin/VillagerMixin` : intercepte `setVillagerData`, ce qui donne les actualités de métier et bloque les changements de métier
     des villageois verrouillés ou liés (`isFrozen`, contourné par `bypassFreeze`), ainsi que `getBreedOffspring` (naissances).
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
-  `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
+  `FamilyTree` (arbre généalogique), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
   `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
 - Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
 - La gazette stocke un **type + des arguments**, jamais du texte : le client compose la phrase dans sa langue (`Texts.news`).

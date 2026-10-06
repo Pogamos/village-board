@@ -61,6 +61,8 @@ final class TerritoryMap {
 	static final int CHILD = 0xFFE0A21B;
 	static final int NITWIT = 0xFF8A8A8A;
 	static final int PLAYER = 0xFFFFFFFF;
+	static final int HOUSED = 0xFF2A1A0E;
+	static final int HOMELESS = 0xFFE67E22;
 	static final int BED_FREE = 0xFF7CCB5A;
 	static final int BED_TAKEN = 0xFFB0413A;
 	static final int BOUND_BED = 0xFFE0A21B;
@@ -343,6 +345,8 @@ final class TerritoryMap {
 		UNEMPLOYED(TerritoryMap.UNEMPLOYED, "legend.unemployed"),
 		CHILD(TerritoryMap.CHILD, "legend.child"),
 		NITWIT(TerritoryMap.NITWIT, "legend.nitwit"),
+		HOUSED(TerritoryMap.HOUSED, "legend.housed"),
+		HOMELESS(TerritoryMap.HOMELESS, "legend.homeless"),
 		BED_FREE(TerritoryMap.BED_FREE, "legend.bed_free"),
 		BED_TAKEN(TerritoryMap.BED_TAKEN, "legend.bed_taken"),
 		STATION_FREE(TerritoryMap.STATION_FREE, "legend.station_free"),
@@ -378,8 +382,9 @@ final class TerritoryMap {
 		return v.profession().endsWith(":nitwit") ? Layer.NITWIT : Layer.UNEMPLOYED;
 	}
 
+	/** Un habitant est affiché si son métier et son logement (logé / sans abri) sont tous deux cochés. */
 	private static boolean shown(VillagerView v) {
-		return shown(layerOf(v));
+		return shown(layerOf(v)) && shown(v.home() == null ? Layer.HOMELESS : Layer.HOUSED);
 	}
 
 	private static boolean shown(BoardView.BedView bed) {
@@ -585,7 +590,13 @@ final class TerritoryMap {
 			if (highlighted) {
 				g.fill(sx - 3, sy - 3, sx + 3, sy + 3, 0xFFFFFFFF);
 			}
-			dot(g, sx, sy, color);
+			if (v.home() == null) {
+				// Sans abri : contour orange au lieu du contour sombre.
+				g.fill(sx - 2, sy - 2, sx + 2, sy + 2, HOMELESS);
+				g.fill(sx - 1, sy - 1, sx + 1, sy + 1, color);
+			} else {
+				dot(g, sx, sy, color);
+			}
 		}
 
 		// Élément épinglé : anneau rouge autour du lit ou du poste.
@@ -809,14 +820,16 @@ final class TerritoryMap {
 		g.fill(box[0] - 1, box[1] - 1, box[2] + 1, box[3] + 1, FRAME);
 		g.fill(box[0], box[1], box[2], box[3], 0xF2F7ECCD);
 		Layer[] layers = Layer.values();
+		int rows = filterRows();
+		int hoveredIndex = filterIndex(mouseX, mouseY);
 		for (int i = 0; i < layers.length; i++) {
 			Layer layer = layers[i];
-			int ry = box[1] + 3 + i * FILTER_ROW;
-			boolean over = mouseX >= box[0] && mouseX < box[2] && mouseY >= ry - 1 && mouseY < ry + FILTER_ROW - 1;
-			if (over) {
-				g.fill(box[0] + 1, ry - 1, box[2] - 1, ry + FILTER_ROW - 1, 0x22603A1A);
+			int colX = box[0] + (i / rows) * FILTER_WIDTH;
+			int ry = box[1] + 3 + (i % rows) * FILTER_ROW;
+			if (i == hoveredIndex) {
+				g.fill(colX + 1, ry - 1, colX + FILTER_WIDTH - 1, ry + FILTER_ROW - 1, 0x22603A1A);
 			}
-			int cx = box[0] + 4;
+			int cx = colX + 4;
 			g.fill(cx, ry + 1, cx + 7, ry + 8, 0xFF3B2A1A);
 			g.fill(cx + 1, ry + 2, cx + 6, ry + 7, 0xFFF7ECCD);
 			if (shown(layer)) {
@@ -832,7 +845,25 @@ final class TerritoryMap {
 	private int[] filterBox() {
 		int right = x + w - 18;
 		int top = y + 3;
-		return new int[]{right - FILTER_WIDTH, top, right, top + Layer.values().length * FILTER_ROW + 4};
+		int rows = filterRows();
+		int cols = (Layer.values().length + rows - 1) / rows;
+		return new int[]{right - cols * FILTER_WIDTH, top, right, top + rows * FILTER_ROW + 4};
+	}
+
+	/** Lignes par colonne : le panneau passe sur deux colonnes si la carte est trop basse. */
+	private int filterRows() {
+		return Math.max(1, Math.min(Layer.values().length, (h - 10) / FILTER_ROW));
+	}
+
+	/** Indice de la couche sous la souris dans le panneau des filtres, ou -1. */
+	private int filterIndex(double mouseX, double mouseY) {
+		int[] box = filterBox();
+		if (mouseX < box[0] || mouseX >= box[2] || mouseY < box[1] + 2 || mouseY >= box[3] - 2) {
+			return -1;
+		}
+		int rows = filterRows();
+		int i = (int) ((mouseX - box[0]) / FILTER_WIDTH) * rows + (int) ((mouseY - box[1] - 2) / FILTER_ROW);
+		return i < Layer.values().length ? i : -1;
 	}
 
 	private boolean overControls(double mouseX, double mouseY) {
@@ -930,8 +961,8 @@ final class TerritoryMap {
 			return true;
 		}
 		if (overFilters(mouseX, mouseY)) {
-			int i = (int) ((mouseY - filterBox()[1] - 2) / FILTER_ROW);
-			if (i >= 0 && i < Layer.values().length) {
+			int i = filterIndex(mouseX, mouseY);
+			if (i >= 0) {
 				Layer layer = Layer.values()[i];
 				if (!HIDDEN.remove(layer)) {
 					HIDDEN.add(layer);

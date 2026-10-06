@@ -46,7 +46,11 @@ public enum NewsType {
 	/** nombre de bornes */
 	TERRITORY("⚑", 0xFF5A4A3A),
 	/** ancien nom, nouveau nom */
-	VILLAGE_RENAMED("✎", 0xFF5A4A3A);
+	VILLAGE_RENAMED("✎", 0xFF5A4A3A),
+	/** joueur qui l'a retiré (vide si inconnu) */
+	BOARD_REMOVED("✖", 0xFF8B1A1A),
+	/** coordonnées du nouveau tableau */
+	BOARD_MOVED("⚑", 0xFF5A4A3A);
 
 	public final String symbol;
 	public final int color;

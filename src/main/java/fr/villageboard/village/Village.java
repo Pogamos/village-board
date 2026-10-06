@@ -14,7 +14,10 @@ public final class Village {
 	public String id;
 	public String name;
 	public String dimension;
+	/** Position du tableau de la mairie ; s'il a été retiré ({@link #boardMissing}), sa dernière position. */
 	public long board;
+	/** Tableau retiré : le village et ses bornes sont conservés jusqu'à ce qu'un tableau soit reposé sur le territoire. */
+	public boolean boardMissing;
 	public String founder;
 	public String founderName;
 	public long foundedAt;

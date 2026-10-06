@@ -38,7 +38,19 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   Un **clic** sur un habitant, un lit ou un poste l'épingle : ses liens (lit, poste) restent affichés et un encart
   résume où il dort et travaille, avec un lien vers sa fiche. Re-clic ou clic dans le vide pour le relâcher.
   Le bouton **entonnoir** ouvre la légende, qui sert aussi de filtre : une case par type de point (habitants par statut,
-  lits libres / occupés, postes libres / occupés, bornes, joueur). Les filtres sont gardés tant que le jeu tourne.
+  logés / sans abri, lits libres / occupés, postes libres / occupés, bornes, joueur). Un habitant n'est affiché que si
+  son statut **et** son logement sont cochés : décocher « Logés » ne laisse voir que les sans-abri, qui ont un contour orange.
+  Les filtres sont gardés tant que le jeu tourne.
+
+### Généalogie
+Le mod tient un **état civil** : à chaque naissance, il note les deux parents. Ces entrées sont gardées après la mort ou
+le départ des villageois. Dans la fiche, la ligne **Famille** compte les parents, frères et sœurs (demi-frères et
+demi-sœurs compris) et enfants connus. Le lien **[arbre]** ouvre l'arbre généalogique, qui montre les grands-parents,
+les parents, le villageois parmi ses frères et sœurs, puis ses enfants. Les morts (✝ et jour du décès), les partis et
+ceux qui vivent dans un autre village restent visibles. Un clic sur une case recentre l'arbre ; « Voir la fiche » ouvre
+celle du villageois centré s'il est encore au registre.
+Les villageois arrivés adultes n'ont pas de parents connus. Les naissances d'avant la v0.8 sont reprises quand le nom
+de chaque parent ne désigne qu'un seul habitant.
 
 ### Besoins du village
 L'onglet **Besoins** liste ce qui manque au village, du plus grave au moins grave (le nombre de besoins importants
@@ -83,9 +95,16 @@ L'occupant éventuel est délogé et cherchera un autre lit. Le villageois garde
 rompu et la gazette l'annonce. Utilisable aussi pour les enfants et les niais. Sur la carte, les lits attitrés sont
 cerclés de doré ; dans la fiche, le lit attitré a des liens [carte] et [libérer].
 
+### Déplacer le tableau
+- Seuls le fondateur et les opérateurs peuvent retirer le tableau. Le village n'est **pas** dissous : il garde ses
+  bornes, ses habitants, sa gazette et l'état civil, en attente d'un nouveau tableau. La gazette l'annonce.
+- Poser un tableau sur son territoire, ou à moins de 256 blocs (`maxBorneDistance`) de **toutes** ses bornes, le
+  rattache au village, avec ses bornes. Sans bornes, le territoire provisoire (cercle) se recentre sur le nouveau tableau.
+- Un tableau qui disparaît sans être cassé par un joueur (/setblock, autre mod) est détecté au recensement suivant.
+- Pour supprimer vraiment un village : `/villageboard remove <id>`. `/villageboard list` signale les villages sans tableau.
+
 ### Droits
 - Tout le monde peut consulter le tableau. Les actions se font à moins de 8 blocs du tableau.
-- Seuls le fondateur et les opérateurs peuvent retirer le tableau, ce qui dissout le village.
 - Gérer les villageois et les bornes est ouvert à tous par défaut. Avec `"managers": "founder"` dans `config/villageboard.json`,
   c'est réservé au fondateur et aux opérateurs.
 
@@ -99,7 +118,7 @@ Copie `build/libs/villageboard-<version>.jar` dans le dossier `mods/` du serveur
 (en retirant l'ancienne version du mod).
 Il faut aussi **Fabric API** des deux côtés.
 
-Les données sont dans `<monde>/villageboard/villages.json` (enregistrées toutes les 60 s et à l'arrêt). La configuration est dans `config/villageboard.json`.
+Les données sont dans `<monde>/villageboard/villages.json` et `family.json` (état civil), enregistrées toutes les 60 s et à l'arrêt. La configuration est dans `config/villageboard.json`.
 
 ## Développement (tout passe par Docker)
 
@@ -117,7 +136,8 @@ Les textures sont générées par `tools/GenTextures.java` :
 ```
 src/main/java/fr/villageboard/        commun (serveur + client)
 ├── block/      tableau de la mairie, borne
-├── village/    VillageManager (registre, bornes, gazette), VillagerActions, Assignments (poste et lit attitrés), Facilities (lits, postes, cloches),
+├── village/    VillageManager (registre, bornes, gazette), Genealogy + Kin (état civil), VillagerActions,
+│               Assignments (poste et lit attitrés), Facilities (lits, postes, cloches),
 │               Territory (polygone), événements, commande
 ├── item/       contrat de travail, bail de logement
 ├── net/        paquets réseau (vue du tableau, frontières, actions)

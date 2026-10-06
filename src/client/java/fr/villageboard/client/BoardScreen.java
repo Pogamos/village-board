@@ -37,7 +37,8 @@ import java.util.function.Predicate;
 
 /**
  * Le tableau de la mairie : une planche de liège dans un cadre de bois, avec des parchemins épinglés.
- * Trois onglets : la gazette, les habitants (liste par métier puis fiche), le territoire (carte et bornes).
+ * Onglets : la gazette, les habitants (liste par métier, fiche, arbre généalogique), les besoins, le territoire
+ * (carte et bornes).
  * La planche s'agrandit avec la fenêtre (entre 320×220 et 460×300 pixels d'interface).
  */
 public class BoardScreen extends Screen {
@@ -92,6 +93,9 @@ public class BoardScreen extends Screen {
 	private List<VillageNeeds.Need> needs = List.of();
 	private final List<Hit> hits = new ArrayList<>();
 	private TerritoryMap map;
+	private final FamilyTree tree = new FamilyTree();
+	/** Vrai quand l'onglet Habitants montre l'arbre généalogique (centré sur {@link FamilyTree#focus()}). */
+	private boolean showTree;
 	private int left;
 	private int top;
 	private int boardW;
@@ -100,6 +104,7 @@ public class BoardScreen extends Screen {
 	public BoardScreen(BoardView view) {
 		super(Component.translatable("villageboard.gui.title"));
 		this.view = view;
+		tree.setView(view);
 	}
 
 	public String villageId() {
@@ -115,6 +120,7 @@ public class BoardScreen extends Screen {
 		if (map != null) {
 			map.setView(newView);
 		}
+		tree.setView(newView);
 		needs = VillageNeeds.compute(newView);
 		renaming = false;
 		confirmReset = false;
@@ -166,7 +172,9 @@ public class BoardScreen extends Screen {
 		newsRows = buildNewsRows(contentRight() - contentLeft() - 8);
 		needs = VillageNeeds.compute(view);
 		nameBox = null;
-		if (tab == Tab.PEOPLE && selectedVillager() != null) {
+		if (tab == Tab.PEOPLE && showTree) {
+			initTree();
+		} else if (tab == Tab.PEOPLE && selectedVillager() != null) {
 			initSheet(selectedVillager());
 		} else if (tab == Tab.TERRITORY) {
 			initTerritory();
@@ -237,6 +245,31 @@ public class BoardScreen extends Screen {
 		}
 	}
 
+	private void initTree() {
+		int x = contentLeft();
+		int y = buttonRowY();
+		addRenderableWidget(Button.builder(gui("back"), b -> {
+			showTree = false;
+			rebuildWidgets();
+		}).bounds(x, y, 80, 20).build());
+		UUID focus = tree.focus();
+		Button sheet = addRenderableWidget(Button.builder(gui("family.sheet"), b -> {
+			showTree = false;
+			selected = focus;
+			rebuildWidgets();
+		}).bounds(x + 84, y, 110, 20).build());
+		sheet.active = focus != null && tree.resident(focus);
+		if (!sheet.active) {
+			sheet.setTooltip(Tooltip.create(gui("family.not_resident")));
+		}
+	}
+
+	private void openTree(UUID uuid) {
+		tree.setFocus(uuid);
+		showTree = true;
+		rebuildWidgets();
+	}
+
 	private void initTerritory() {
 		int x = contentLeft();
 		int y = buttonRowY();
@@ -298,7 +331,9 @@ public class BoardScreen extends Screen {
 			case NEWS -> drawNews(g);
 			case PEOPLE -> {
 				VillagerView v = selectedVillager();
-				if (v == null) {
+				if (showTree) {
+					tree.render(g, font, contentLeft() + 2, contentTop(), contentRight() - 4, contentBottomWithButtons(), mouseX, mouseY);
+				} else if (v == null) {
 					drawPeople(g, mouseX, mouseY);
 				} else {
 					drawSheet(g, v, mouseX, mouseY);
@@ -488,6 +523,7 @@ public class BoardScreen extends Screen {
 		scroll = 0;
 		renaming = false;
 		confirmReset = false;
+		showTree = false;
 		rebuildWidgets();
 	}
 
@@ -649,12 +685,40 @@ public class BoardScreen extends Screen {
 		} else {
 			ty = line(g, Component.translatable("villageboard.gui.since", v.firstSeenDay()), tx, ty, width, FADED);
 		}
+		ty = drawFamily(g, v, tx, ty, width, mouseX, mouseY);
 		if (!v.loaded()) {
 			line(g, Component.translatable("villageboard.gui.last_seen", Texts.ago(v.lastSeen())), tx, ty, width, FADED);
 		}
 		if (renaming) {
 			g.text(font, gui("new_name"), contentLeft() + 2, buttonRowY() - 19, INK, false);
 		}
+	}
+
+	/** Ligne « Famille » de la fiche : nombre de proches connus et lien vers l'arbre. */
+	private int drawFamily(GuiGraphicsExtractor g, VillagerView v, int x, int y, int width, int mouseX, int mouseY) {
+		if (!tree.known(v.uuid())) {
+			return line(g, gui("family.none"), x, y, width, FADED);
+		}
+		int[] counts = tree.counts(v.uuid());
+		List<Component> parts = new ArrayList<>();
+		String[] keys = {"parents", "siblings", "children"};
+		for (int i = 0; i < 3; i++) {
+			if (counts[i] > 0) {
+				parts.add(Component.translatable("villageboard.gui.family." + keys[i] + (counts[i] == 1 ? ".one" : ".many"), counts[i]));
+			}
+		}
+		MutableComponent text = gui("family.label");
+		for (int i = 0; i < parts.size(); i++) {
+			text.append(i == 0 ? " " : " · ").append(parts.get(i));
+		}
+		if (font.width(text) + 4 + font.width(gui("family.tree")) > width) {
+			y = line(g, text, x, y, width, INK);
+			link(g, gui("family.tree"), x, y, mouseX, mouseY, () -> openTree(v.uuid()));
+		} else {
+			g.text(font, text, x, y, INK, false);
+			link(g, gui("family.tree"), x + font.width(text) + 4, y, mouseX, mouseY, () -> openTree(v.uuid()));
+		}
+		return y + 10;
 	}
 
 	private void drawTerritory(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -748,6 +812,7 @@ public class BoardScreen extends Screen {
 	private void selectTab(Tab t) {
 		if (t != tab) {
 			tab = t;
+			showTree = false;
 			scroll = 0;
 			renaming = false;
 			confirmReset = false;
@@ -757,6 +822,7 @@ public class BoardScreen extends Screen {
 
 	private void openSheet(VillagerView v) {
 		selected = v.uuid();
+		showTree = false;
 		renaming = false;
 		confirmReset = false;
 		rebuildWidgets();
@@ -876,6 +942,10 @@ public class BoardScreen extends Screen {
 				hit.action().run();
 				return true;
 			}
+		}
+		if (tab == Tab.PEOPLE && showTree && tree.mouseClicked(event.x(), event.y())) {
+			rebuildWidgets();
+			return true;
 		}
 		return tab == Tab.TERRITORY && map != null && map.mouseClicked(event.x(), event.y(), event.button());
 	}

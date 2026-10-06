@@ -40,8 +40,11 @@ public final class VillageCommand {
 			return 0;
 		}
 		for (Village v : m.villages()) {
-			ctx.getSource().sendSuccess(() -> Component.translatable("villageboard.cmd.entry",
-					v.name, v.id, v.villagers.size(), v.bornes.size(), v.boardPos().toShortString(), v.dimension), false);
+			Component entry = Component.translatable("villageboard.cmd.entry",
+					v.name, v.id, v.villagers.size(), v.bornes.size(), v.boardPos().toShortString(), v.dimension);
+			ctx.getSource().sendSuccess(() -> v.boardMissing
+					? entry.copy().append(Component.translatable("villageboard.cmd.no_board"))
+					: entry, false);
 		}
 		return m.villages().size();
 	}
