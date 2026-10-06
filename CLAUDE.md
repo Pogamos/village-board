@@ -41,6 +41,9 @@ Pièges déjà rencontrés en 26.2 :
   - `village/VillageManager` : registre côté serveur. Une instance par serveur, thread serveur uniquement,
     sauvegarde JSON dans `<monde>/villageboard/villages.json`. Gère le recensement (`observe`), les déménagements et départs,
     la gazette, les bornes et les droits.
+  - `village/Housing` : lits du territoire (POI `HOME`), relus seulement dans les chunks chargés, avec un cache par chunk
+    dans `Village.bedCache` (non sauvegardé). L'état « lits libres / aucun » est annoncé après 2 recensements identiques.
+    Minecraft n'efface la mémoire `HOME` d'un lit détruit qu'au coucher : `VillageManager.bedExists` vérifie que le lit existe encore.
   - `village/WorkAssignments` : postes attitrés (contrat de travail). `VillagerActions` : renommer, localiser, verrou, réinitialisation.
   - `village/Territory` : géométrie partagée client/serveur. Polygone des bornes trié par angle autour du barycentre ;
     cercle provisoire avec moins de 3 bornes.

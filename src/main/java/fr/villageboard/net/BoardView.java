@@ -19,9 +19,17 @@ public record BoardView(
 		int defaultRadius,
 		List<BlockPos> polygon,
 		List<NewsEntry> news,
-		List<VillagerView> villagers) {
+		List<VillagerView> villagers,
+		List<BedView> beds) {
 
-	/** Fiche d'un villageois ; les champs « live » ne sont remplis que s'il est chargé côté serveur. */
+	/** Un lit du territoire (position de la tête du lit). Son occupant se déduit du champ {@code home} des villageois. */
+	public record BedView(BlockPos pos, boolean occupied) {
+	}
+
+	/**
+	 * Fiche d'un villageois ; les champs « live » (santé, expérience, échanges, poste de travail) ne sont remplis
+	 * que s'il est chargé côté serveur. {@code home} est le dernier lit connu, null = sans abri.
+	 */
 	public record VillagerView(
 			UUID uuid,
 			String name,
@@ -93,6 +101,10 @@ public record BoardView(
 			b.writeCollection(n.args(), FriendlyByteBuf::writeUtf);
 		});
 		buf.writeCollection(villagers, (b, v) -> v.write(b));
+		buf.writeCollection(beds, (b, bed) -> {
+			b.writeBlockPos(bed.pos());
+			b.writeBoolean(bed.occupied());
+		});
 	}
 
 	static BoardView read(FriendlyByteBuf buf) {
@@ -100,6 +112,7 @@ public record BoardView(
 				buf.readBlockPos(), buf.readVarInt(),
 				buf.readList(b -> b.readBlockPos()),
 				buf.readList(b -> new NewsEntry(b.readLong(), b.readVarLong(), b.readEnum(NewsType.class), b.readList(FriendlyByteBuf::readUtf))),
-				buf.readList(VillagerView::read));
+				buf.readList(VillagerView::read),
+				buf.readList(b -> new BedView(b.readBlockPos(), b.readBoolean())));
 	}
 }

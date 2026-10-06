@@ -339,6 +339,9 @@ public class BoardScreen extends Screen {
 		pin(g, cx + plaqueHalf - 7, top + 6);
 		MutableComponent title = Component.literal(view.name()).withStyle(ChatFormatting.BOLD);
 		g.text(font, title, cx - font.width(title) / 2, top + 9, INK, false);
+		if (mouseX >= cx - plaqueHalf && mouseX < cx + plaqueHalf && mouseY >= top + 4 && mouseY < top + 22) {
+			g.setTooltipForNextFrame(font, Component.translatable("villageboard.gui.founder", view.founderName()), mouseX, mouseY);
+		}
 
 		Tab[] tabs = Tab.values();
 		for (int i = 0; i < tabs.length; i++) {
@@ -514,9 +517,19 @@ public class BoardScreen extends Screen {
 			ty = line(g, v.jobSite() != null
 					? Component.translatable("villageboard.gui.job_site", coords(v.jobSite()))
 					: gui("job_site.none"), tx, ty, width, INK);
-			ty = line(g, v.home() != null
-					? Component.translatable("villageboard.gui.home", coords(v.home()))
-					: gui("home.none"), tx, ty, width, INK);
+		}
+		if (v.home() != null) {
+			Component home = Component.translatable("villageboard.gui.home", coords(v.home()));
+			g.text(font, home, tx, ty, INK, false);
+			BlockPos bed = v.home();
+			Component link = gui("show_on_map");
+			int lx = tx + font.width(home) + 4;
+			Hit hit = new Hit(lx, ty - 1, lx + font.width(link), ty + 9, () -> showOnMap(bed));
+			g.text(font, link, lx, ty, hit.contains(mouseX, mouseY) ? RED_LINK : LINK, false);
+			hits.add(hit);
+			ty += 10;
+		} else {
+			ty = line(g, freeBeds() > 0 ? gui("homeless.free_beds") : gui("homeless.no_bed"), tx, ty, width, GOLD);
 		}
 		ty += 3;
 		if (v.born()) {
@@ -545,27 +558,38 @@ public class BoardScreen extends Screen {
 		g.text(font, gui("territory").withStyle(ChatFormatting.BOLD), x1, ty, INK, false);
 		ty += 12;
 		ty = line(g, Component.translatable("villageboard.gui.bornes", n), x1, ty, width, INK);
-		ty = line(g, n >= 3
-				? gui("mode_polygon")
-				: Component.translatable("villageboard.gui.mode_circle", view.defaultRadius(), 3 - n), x1, ty, width, n >= 3 ? GREEN : GOLD);
 		ty = line(g, Component.translatable("villageboard.gui.area", Territory.area(view.polygon(), view.defaultRadius())), x1, ty, width, INK);
-		ty = line(g, Component.translatable("villageboard.gui.founder", view.founderName()), x1, ty, width, INK);
-		ty += 4;
+		if (n < 3) {
+			ty = line(g, Component.translatable("villageboard.gui.mode_circle", view.defaultRadius(), 3 - n), x1, ty, width, GOLD);
+		}
+		ty += 6;
 
-		ty = legend(g, x1, ty, TerritoryMap.EMPLOYED, gui("legend.employed"));
-		ty = legend(g, x1, ty, TerritoryMap.UNEMPLOYED, gui("legend.unemployed"));
-		ty = legend(g, x1, ty, TerritoryMap.CHILD, gui("legend.child"));
-		ty = legend(g, x1, ty, TerritoryMap.NITWIT, gui("legend.nitwit"));
-		ty = legend(g, x1, ty, TerritoryMap.PLAYER, gui("legend.you"));
-		ty += 4;
-		line(g, gui("map_hint"), x1, ty, width, FADED);
+		int beds = view.beds().size();
+		int free = freeBeds();
+		long homeless = view.villagers().stream().filter(v -> v.home() == null).count();
+		g.text(font, gui("housing").withStyle(ChatFormatting.BOLD), x1, ty, INK, false);
+		ty += 12;
+		ty = line(g, Component.translatable("villageboard.gui.beds", beds, free), x1, ty, width, INK);
+		ty = line(g, Component.translatable("villageboard.gui.homeless_count", homeless), x1, ty, width, homeless > 0 ? GOLD : INK);
+		if (free == 0) {
+			line(g, gui("no_free_bed"), x1, ty + 2, width, RED_LINK);
+		}
 	}
 
-	private int legend(GuiGraphicsExtractor g, int x, int y, int color, Component label) {
-		g.fill(x, y + 1, x + 6, y + 7, 0xFF2A1A0E);
-		g.fill(x + 1, y + 2, x + 5, y + 6, color);
-		g.text(font, label, x + 10, y, INK, false);
-		return y + 10;
+	private int freeBeds() {
+		return (int) view.beds().stream().filter(b -> !b.occupied()).count();
+	}
+
+	/** Lien « voir sur la carte » : ouvre l'onglet Territoire centré sur ce point. */
+	private void showOnMap(BlockPos pos) {
+		tab = Tab.TERRITORY;
+		scroll = 0;
+		renaming = false;
+		confirmReset = false;
+		rebuildWidgets();
+		if (map != null) {
+			map.focus(pos);
+		}
 	}
 
 	// ------------------------------------------------------------------ petits éléments graphiques
@@ -637,6 +661,7 @@ public class BoardScreen extends Screen {
 		List<Category> result = new ArrayList<>();
 		result.add(category("all", gui("cat.all"), v -> true));
 		result.add(category("child", gui("cat.children"), VillagerView::baby));
+		result.add(category("homeless", gui("cat.homeless"), v -> v.home() == null));
 		List<String> professions = view.villagers().stream()
 				.filter(v -> !v.baby())
 				.map(VillagerView::profession)

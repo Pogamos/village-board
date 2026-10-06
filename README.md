@@ -32,7 +32,16 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   - **Réinitialiser** : le villageois quitte son poste, qui est libéré, perd son XP et ses échanges, puis cherche un nouveau travail.
 - **Territoire** : carte interactive peinte d'après le terrain (comme une carte vanilla) : territoire teinté et cerné,
   villages voisins en bleu, bornes, mairie, habitants colorés par statut, liens vers les postes attitrés, position du joueur.
-  Molette = zoom, glisser = déplacer, survol = nom, clic sur un habitant = sa fiche, boutons + / − / recentrer.
+  Molette = zoom, glisser = déplacer, survol = nom, clic sur un habitant = sa fiche, boutons + / − / recentrer,
+  « ? » = légende.
+
+### Logement
+- Les lits du territoire apparaissent sur la carte : verts s'ils sont libres, rouges s'ils sont occupés. Au survol d'un lit,
+  on voit son occupant ; au survol d'un habitant, un trait bleu le relie à son lit. Un clic sur un lit ouvre la fiche de son occupant.
+- L'onglet Territoire résume le logement : nombre de lits, lits libres, nombre de sans-abri.
+- La catégorie **Sans abri** de l'onglet Habitants liste les villageois sans lit. Dans chaque fiche, le lit s'affiche avec un lien **[carte]**.
+- La gazette annonce quand il ne reste **plus aucun lit libre** (les villageois ne peuvent alors plus avoir d'enfants),
+  puis quand des lits se libèrent.
 
 Les villageois **sans nom** restent anonymes : « Sans nom » dans les listes, « un villageois sans nom » dans la gazette.
 Un villageois vu hors des bornes pendant 60 s (`leaveDelaySeconds`) est rayé du registre et la gazette annonce son départ.
@@ -79,7 +88,7 @@ Les textures sont générées par `tools/GenTextures.java` :
 ```
 src/main/java/fr/villageboard/        commun (serveur + client)
 ├── block/      tableau de la mairie, borne
-├── village/    VillageManager (registre, bornes, gazette), VillagerActions, WorkAssignments (postes attitrés),
+├── village/    VillageManager (registre, bornes, gazette), VillagerActions, WorkAssignments (postes attitrés), Housing (lits),
 │               Territory (polygone), événements, commande
 ├── item/       contrat de travail
 ├── net/        paquets réseau (vue du tableau, frontières, actions)

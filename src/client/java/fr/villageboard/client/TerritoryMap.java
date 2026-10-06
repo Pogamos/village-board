@@ -17,18 +17,22 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.MapColor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
  * Carte du territoire vue du dessus, peinte comme une carte vanilla à partir des chunks chargés
  * côté client : territoire teinté et cerné, villages voisins en bleu, le reste estompé.
+ * Lits libres (vert) et occupés (rouge) ; survoler un habitant ou un lit relie l'un à l'autre.
  * Molette = zoom (autour du curseur), glisser = déplacer, clic sur un habitant = sa fiche.
  */
 final class TerritoryMap {
@@ -50,6 +54,11 @@ final class TerritoryMap {
 	static final int CHILD = 0xFFE0A21B;
 	static final int NITWIT = 0xFF8A8A8A;
 	static final int PLAYER = 0xFFFFFFFF;
+	static final int BED_FREE = 0xFF7CCB5A;
+	static final int BED_TAKEN = 0xFFB0413A;
+	private static final ItemStack BED_FREE_ICON = new ItemStack(Items.BED.pick(DyeColor.LIME));
+	private static final ItemStack BED_TAKEN_ICON = new ItemStack(Items.BED.pick(DyeColor.RED));
+	private static final int CONTROLS = 4;
 
 	private record Hover(Component text, VillagerView villager) {
 	}
@@ -80,6 +89,11 @@ final class TerritoryMap {
 	private double dragCenterX;
 	private double dragCenterZ;
 	private Hover hover;
+	private boolean helpHover;
+	/** Lit (BlockPos compacté) → son occupant d'après le registre. */
+	private Map<Long, VillagerView> ownerByBed = Map.of();
+	private BlockPos focusPos;
+	private long focusUntil;
 
 	TerritoryMap(Minecraft mc, Consumer<VillagerView> onVillagerClick) {
 		this.mc = mc;
@@ -88,6 +102,13 @@ final class TerritoryMap {
 
 	void setView(BoardView view) {
 		this.view = view;
+		Map<Long, VillagerView> owners = new HashMap<>();
+		for (VillagerView v : view.villagers()) {
+			if (v.home() != null) {
+				owners.put(v.home().asLong(), v);
+			}
+		}
+		ownerByBed = owners;
 		dirty = true;
 	}
 
@@ -298,6 +319,29 @@ final class TerritoryMap {
 		g.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, x + offX, y + offY, 0, 0, w, h, w, h);
 
 		hover = null;
+		helpHover = false;
+		long now = System.currentTimeMillis();
+
+		// 1) Ce qui est sous la souris (habitant, sinon lit), pour savoir quels liens tracer.
+		List<VillagerView> under = new ArrayList<>();
+		for (VillagerView v : view.villagers()) {
+			if (near(mouseX, mouseY, v.pos(), 3)) {
+				under.add(v);
+			}
+		}
+		BoardView.BedView hoveredBed = null;
+		if (under.isEmpty()) {
+			for (BoardView.BedView bed : view.beds()) {
+				if (near(mouseX, mouseY, bed.pos(), bedRadius())) {
+					hoveredBed = bed;
+					break;
+				}
+			}
+		}
+		VillagerView linked = !under.isEmpty() ? under.getFirst()
+				: hoveredBed != null ? ownerByBed.get(hoveredBed.pos().asLong()) : null;
+
+		// 2) Bornes.
 		List<BlockPos> polygon = view.polygon();
 		for (int i = 0; i < polygon.size(); i++) {
 			BlockPos p = polygon.get(i);
@@ -309,13 +353,39 @@ final class TerritoryMap {
 			}
 		}
 
+		// 3) Lits : petits carrés de loin, icônes de lit de près.
+		boolean bedIcons = scale >= 2.5;
+		for (BoardView.BedView bed : view.beds()) {
+			int sx = (int) toScreenX(bed.pos().getX() + 0.5);
+			int sy = (int) toScreenY(bed.pos().getZ() + 0.5);
+			if (bedIcons) {
+				icon(g, bed.occupied() ? BED_TAKEN_ICON : BED_FREE_ICON, sx, sy, 0.5f);
+			} else {
+				g.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF2A1A0E);
+				g.fill(sx - 1, sy - 1, sx + 1, sy + 1, bed.occupied() ? BED_TAKEN : BED_FREE);
+			}
+		}
+		if (hoveredBed != null) {
+			VillagerView owner = ownerByBed.get(hoveredBed.pos().asLong());
+			Component text = owner != null
+					? Component.translatable("villageboard.map.bed_of", Texts.listName(owner.name()))
+					: Component.translatable(hoveredBed.occupied() ? "villageboard.map.bed_taken" : "villageboard.map.bed_free");
+			hover = new Hover(text, owner);
+		}
+
+		// 4) Liens : postes attitrés (doré), lit de l'habitant survolé (bleu).
 		for (VillagerView v : view.villagers()) {
 			if (v.bound() != null && v.loaded()) {
 				dottedLine(g, toScreenX(v.pos().getX() + 0.5), toScreenY(v.pos().getZ() + 0.5),
 						toScreenX(v.bound().getX() + 0.5), toScreenY(v.bound().getZ() + 0.5), 0xCCB8860B);
 			}
 		}
-		List<VillagerView> under = new ArrayList<>();
+		if (linked != null && linked.home() != null) {
+			dottedLine(g, toScreenX(linked.pos().getX() + 0.5), toScreenY(linked.pos().getZ() + 0.5),
+					toScreenX(linked.home().getX() + 0.5), toScreenY(linked.home().getZ() + 0.5), 0xFF1F4E8C);
+		}
+
+		// 5) Habitants.
 		for (VillagerView v : view.villagers()) {
 			int sx = (int) toScreenX(v.pos().getX() + 0.5);
 			int sy = (int) toScreenY(v.pos().getZ() + 0.5);
@@ -323,21 +393,27 @@ final class TerritoryMap {
 			if (!v.loaded()) {
 				color = (color & 0x00FFFFFF) | 0x99000000;
 			}
+			if (v == linked) {
+				g.fill(sx - 3, sy - 3, sx + 3, sy + 3, 0xFFFFFFFF);
+			}
 			g.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF2A1A0E);
 			g.fill(sx - 1, sy - 1, sx + 1, sy + 1, color);
-			if (Math.abs(mouseX - sx) <= 3 && Math.abs(mouseY - sy) <= 3) {
-				under.add(v);
-			}
 		}
 
+		// 6) Mairie, repère demandé depuis une fiche, joueur.
 		BlockPos board = view.board();
 		int bx = (int) toScreenX(board.getX() + 0.5);
 		int by = (int) toScreenY(board.getZ() + 0.5);
 		icon(g, new ItemStack(Items.BELL), bx, by, 0.75f);
-		if (Math.abs(mouseX - bx) <= 6 && Math.abs(mouseY - by) <= 6) {
+		if (hover == null && Math.abs(mouseX - bx) <= 6 && Math.abs(mouseY - by) <= 6) {
 			hover = new Hover(Component.translatable("villageboard.map.board", view.name()), null);
 		}
-
+		if (focusPos != null && now < focusUntil) {
+			int fx = (int) toScreenX(focusPos.getX() + 0.5);
+			int fy = (int) toScreenY(focusPos.getZ() + 0.5);
+			int r = 5 + (int) ((now / 120) % 4);
+			ring(g, fx, fy, r, 0xFFC0392B);
+		}
 		if (mc.player != null && mc.level != null
 				&& mc.level.dimension().identifier().toString().equals(dimensionOfBoard())) {
 			int px = (int) toScreenX(mc.player.getX());
@@ -355,6 +431,9 @@ final class TerritoryMap {
 			VillagerView v = under.getFirst();
 			Component text = Texts.listName(v.name()).copy().append(" · ").append(
 					v.baby() ? Component.translatable("villageboard.gui.child") : Texts.profession(v.profession()));
+			if (v.home() == null) {
+				text = text.copy().append(" · ").append(Component.translatable("villageboard.gui.homeless"));
+			}
 			if (under.size() > 1) {
 				text = text.copy().append(Component.translatable("villageboard.map.more", under.size() - 1));
 			}
@@ -370,7 +449,9 @@ final class TerritoryMap {
 			g.fill(x + 2, y + h - 11, x + 6 + cw, y + h - 2, 0xAAF3E5C0);
 			g.text(font, coords, x + 4, y + h - 10, 0xFF3B2A1A, false);
 		}
-		if (hover != null) {
+		if (helpHover) {
+			g.setComponentTooltipForNextFrame(font, legend(), mouseX, mouseY);
+		} else if (hover != null) {
 			g.setTooltipForNextFrame(font, hover.text(), mouseX, mouseY);
 		}
 	}
@@ -390,25 +471,73 @@ final class TerritoryMap {
 		return v.profession().endsWith(":nitwit") ? NITWIT : UNEMPLOYED;
 	}
 
-	/** Boutons zoom +, zoom −, recentrer (coin supérieur droit). */
+	/** Boutons zoom +, zoom −, recentrer et aide (coin supérieur droit). */
 	private void controls(GuiGraphicsExtractor g, Font font, int mouseX, int mouseY) {
-		String[] labels = {"+", "-", ""};
-		for (int i = 0; i < 3; i++) {
+		String[] labels = {"+", "-", "", "?"};
+		for (int i = 0; i < CONTROLS; i++) {
 			int bx = x + w - 14;
 			int by = y + 3 + i * 14;
 			boolean over = mouseX >= bx && mouseX < bx + 11 && mouseY >= by && mouseY < by + 11;
 			g.fill(bx - 1, by - 1, bx + 12, by + 12, FRAME);
 			g.fill(bx, by, bx + 11, by + 11, over ? 0xFFFFF4D6 : 0xFFF3E5C0);
-			if (i < 2) {
-				g.text(font, labels[i], bx + 6 - font.width(labels[i]) / 2, by + 2, 0xFF3B2A1A, false);
-			} else {
+			if (i == 2) {
 				g.fill(bx + 5, by + 2, bx + 6, by + 9, 0xFF3B2A1A);
 				g.fill(bx + 2, by + 5, bx + 9, by + 6, 0xFF3B2A1A);
+			} else {
+				g.text(font, labels[i], bx + 6 - font.width(labels[i]) / 2, by + 2, 0xFF3B2A1A, false);
+			}
+			if (over && i == 2) {
+				hover = new Hover(Component.translatable("villageboard.map.recenter"), null);
+			} else if (over && i == 3) {
+				helpHover = true;
 			}
 		}
-		if (mouseX >= x + w - 14 && mouseX < x + w - 3 && mouseY >= y + 3 + 28 && mouseY < y + 3 + 39) {
-			hover = new Hover(Component.translatable("villageboard.map.recenter"), null);
-		}
+	}
+
+	/** Légende et mode d'emploi, affichés au survol du bouton « ? ». */
+	private static List<Component> legend() {
+		return List.of(
+				legendLine(EMPLOYED, "legend.employed"),
+				legendLine(UNEMPLOYED, "legend.unemployed"),
+				legendLine(CHILD, "legend.child"),
+				legendLine(NITWIT, "legend.nitwit"),
+				legendLine(BED_FREE, "legend.bed_free"),
+				legendLine(BED_TAKEN, "legend.bed_taken"),
+				legendLine(PLAYER, "legend.you"),
+				Component.empty(),
+				Component.translatable("villageboard.gui.map_hint").withStyle(net.minecraft.ChatFormatting.GRAY));
+	}
+
+	private static Component legendLine(int color, String key) {
+		return Component.literal("■ ").withColor(color & 0xFFFFFF)
+				.append(Component.translatable("villageboard.gui." + key).withStyle(net.minecraft.ChatFormatting.WHITE));
+	}
+
+	/** Centre la carte sur un point et l'y signale quelques secondes (lien « voir sur la carte »). */
+	void focus(BlockPos pos) {
+		centerX = pos.getX() + 0.5;
+		centerZ = pos.getZ() + 0.5;
+		scale = Math.max(scale, 3);
+		fitted = true;
+		focusPos = pos;
+		focusUntil = System.currentTimeMillis() + 4000;
+		dirty = true;
+	}
+
+	private double bedRadius() {
+		return scale >= 2.5 ? 4 : 3;
+	}
+
+	private boolean near(int mouseX, int mouseY, BlockPos pos, double radius) {
+		return Math.abs(mouseX - toScreenX(pos.getX() + 0.5)) <= radius
+				&& Math.abs(mouseY - toScreenY(pos.getZ() + 0.5)) <= radius;
+	}
+
+	private static void ring(GuiGraphicsExtractor g, int cx, int cy, int r, int color) {
+		g.fill(cx - r, cy - r, cx + r + 1, cy - r + 1, color);
+		g.fill(cx - r, cy + r, cx + r + 1, cy + r + 1, color);
+		g.fill(cx - r, cy - r, cx - r + 1, cy + r + 1, color);
+		g.fill(cx + r, cy - r, cx + r + 1, cy + r + 1, color);
 	}
 
 	private static void icon(GuiGraphicsExtractor g, ItemStack stack, int sx, int sy, float size) {
@@ -437,13 +566,15 @@ final class TerritoryMap {
 			return false;
 		}
 		int bx = x + w - 14;
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < CONTROLS; i++) {
 			int by = y + 3 + i * 14;
 			if (mouseX >= bx && mouseX < bx + 11 && mouseY >= by && mouseY < by + 11) {
 				switch (i) {
 					case 0 -> zoom(1.5, x + w / 2.0, y + h / 2.0);
 					case 1 -> zoom(1 / 1.5, x + w / 2.0, y + h / 2.0);
-					default -> fit();
+					case 2 -> fit();
+					default -> {
+					}
 				}
 				return true;
 			}

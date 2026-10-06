@@ -35,6 +35,10 @@ public enum NewsType {
 	CURED("✚", 0xFF2E7D32),
 	/** ancien nom, nouveau nom (vide si retiré) */
 	RENAMED("✎", 0xFF5A4A3A),
+	/** nombre total de lits */
+	HOUSING_FULL("⌂", 0xFFB26A00),
+	/** nombre de lits libres */
+	HOUSING_FREE("⌂", 0xFF2E7D32),
 	/** nombre de bornes */
 	TERRITORY("⚑", 0xFF5A4A3A),
 	/** ancien nom, nouveau nom */

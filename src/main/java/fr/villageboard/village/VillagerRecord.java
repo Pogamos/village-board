@@ -11,6 +11,8 @@ public final class VillagerRecord {
 	public int level = 1;
 	public boolean baby;
 	public boolean locked;
+	/** Lit du villageois (BlockPos compacté), ou null s'il est sans abri. */
+	public Long home;
 	/** Poste attitré par un contrat de travail (BlockPos compacté), ou null. */
 	public Long boundSite;
 	public String dimension;

@@ -27,6 +27,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -272,6 +273,7 @@ public final class VillageManager {
 			}
 		}
 		news(v, NewsType.FOUNDED, v.name, String.valueOf(v.villagers.size()));
+		Housing.scan(level, v, config.defaultRadius);
 		save(true);
 		broadcastBorders();
 		if (placer instanceof ServerPlayer player) {
@@ -395,12 +397,15 @@ public final class VillageManager {
 					live != null && r.employed() ? live.getOffers().size() : 0,
 					BlockPos.containing(r.x, r.y, r.z),
 					live != null ? memory(live, MemoryModuleType.JOB_SITE) : null,
-					live != null ? memory(live, MemoryModuleType.HOME) : null,
+					r.home == null ? null : BlockPos.of(r.home),
 					r.boundSite == null ? null : BlockPos.of(r.boundSite),
 					r.firstSeenDay, r.born, r.parents == null ? "" : r.parents, r.lastSeen));
 		}
+		List<BoardView.BedView> beds = Housing.beds(v).stream()
+				.map(b -> new BoardView.BedView(b.pos(), b.occupied()))
+				.toList();
 		return new BoardView(v.id, v.name, currentDay(), canManage(player, v), v.founderName, v.boardPos(),
-				config.defaultRadius, v.polygon(), List.copyOf(v.news), list);
+				config.defaultRadius, v.polygon(), List.copyOf(v.news), list, beds);
 	}
 
 	private static BlockPos memory(Villager villager, MemoryModuleType<GlobalPos> type) {
@@ -531,6 +536,26 @@ public final class VillageManager {
 				observe(villager, true);
 			}
 			validateBornes(level, dimension);
+			for (Village v : villages.values()) {
+				if (v.dimension.equals(dimension)) {
+					updateHousing(level, v);
+				}
+			}
+		}
+	}
+
+	/** Recense les lits et annonce dans la gazette quand il n'y a plus de lit libre (naissances bloquées), ou plus de nouveau. */
+	private void updateHousing(ServerLevel level, Village v) {
+		Housing.scan(level, v, config.defaultRadius);
+		List<Housing.Bed> beds = Housing.beds(v);
+		int free = (int) beds.stream().filter(b -> !b.occupied()).count();
+		Integer changed = Housing.updateState(v, free);
+		if (changed != null) {
+			if (changed == Housing.FULL) {
+				news(v, NewsType.HOUSING_FULL, String.valueOf(beds.size()));
+			} else {
+				news(v, NewsType.HOUSING_FREE, String.valueOf(free));
+			}
 		}
 	}
 
@@ -625,6 +650,7 @@ public final class VillageManager {
 		r.level = villager.getVillagerData().level();
 		r.baby = villager.isBaby();
 		r.locked = isLocked(villager);
+		r.home = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).map(h -> h.pos().asLong()).orElse(null);
 		GlobalPos site = villager.getAttached(Attachments.BOUND_SITE);
 		r.boundSite = site == null ? null : site.pos().asLong();
 		r.dimension = dim(villager.level());
@@ -636,6 +662,16 @@ public final class VillageManager {
 		if (v != null) {
 			v.dirty = true;
 		}
+	}
+
+	/**
+	 * Le lit mémorisé existe-t-il encore ? Minecraft n'efface la mémoire d'un lit détruit qu'au coucher :
+	 * on vérifie donc nous-mêmes, pour qu'un villageois dont le lit a été cassé apparaisse sans abri tout de suite.
+	 */
+	private boolean bedExists(GlobalPos home) {
+		ServerLevel level = server.getLevel(home.dimension());
+		return level != null && (!level.isLoaded(home.pos())
+				|| level.getPoiManager().exists(home.pos(), type -> type.is(PoiTypes.HOME)));
 	}
 
 	void forget(UUID uuid) {

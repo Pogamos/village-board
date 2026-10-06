@@ -3,6 +3,7 @@ package fr.villageboard.village;
 import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +23,14 @@ public final class Village {
 	public Map<String, VillagerRecord> villagers = new LinkedHashMap<>();
 	/** La plus récente en premier. */
 	public List<NewsEntry> news = new ArrayList<>();
+	/** Dernier état annoncé du logement (voir {@link Housing}). */
+	public int housingState = Housing.UNKNOWN;
 
 	transient boolean dirty;
+	/** Lits connus, par chunk (clé : x << 32 | z). Recalculés au recensement, non sauvegardés. */
+	transient Map<Long, List<Housing.Bed>> bedCache = new HashMap<>();
+	transient int pendingHousingState = Housing.UNKNOWN;
+	transient int pendingHousingCount;
 	private transient List<BlockPos> polygon;
 
 	public BlockPos boardPos() {
