@@ -305,9 +305,8 @@
   "villageboard.gui.divorce": "[divorce]",
   "villageboard.gui.divorce.confirm": "[confirm divorce]",
   "villageboard.gui.single": "Single",
-  "villageboard.card.no_village": "Outside any village",
-  "villageboard.card.village": "Village: %s",
   "villageboard.card.homeless": "Homeless",
   "villageboard.card.kin": "Children: %s · Siblings: %s",
-  "villageboard.dialogue.trade": "Right-click: trade"
+  "villageboard.dialogue.trade": "Right-click: trade",
+  "villageboard.card.housed": "Has a bed"
 }

@@ -538,7 +538,8 @@ public final class VillageManager {
 			talks.put(player.getUUID(), new Talk(villager.getUUID(), now));
 		}
 		ServerPlayNetworking.send(player, new Dialogue(villager.getUUID(), name, profession, Professions.type(villager),
-				villager.isBaby(), line, village == null ? "" : village.name, spouse, player.getPlainTextName(), canTrade));
+				villager.isBaby(), line, village == null ? "" : village.name, spouse, player.getPlainTextName(), canTrade,
+				config.jobSound));
 		level.playSound(null, villager.blockPosition(), SoundEvents.VILLAGER_AMBIENT, SoundSource.NEUTRAL, 1f,
 				villager.isBaby() ? 1.5f : 1f);
 		villager.getLookControl().setLookAt(player, 30f, 30f);
@@ -550,10 +551,9 @@ public final class VillageManager {
 		if (!ServerPlayNetworking.canSend(player, VillagerCard.TYPE)) {
 			return;
 		}
-		VillagerRecord r = observe(villager, true);
-		Village village = index.get(villager.getUUID());
+		observe(villager, true);
 		UUID uuid = villager.getUUID();
-		BlockPos home = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).map(GlobalPos::pos).orElse(null);
+		boolean homeless = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).isEmpty();
 		int couple = 0;
 		String partner = "";
 		List<String> parents = List.of();
@@ -571,10 +571,7 @@ public final class VillageManager {
 			parents = k.parents.stream().map(p -> genealogy.get(UUID.fromString(p))).map(p -> p == null ? "" : p.name).toList();
 		}
 		ServerPlayNetworking.send(player, new VillagerCard(uuid, displayName(villager), Professions.key(villager),
-				Professions.type(villager), villager.getVillagerData().level(), villager.getHealth(), villager.getMaxHealth(),
-				village == null ? "" : village.name, home, villager.hasAttached(Attachments.BOUND_HOME),
-				memory(villager, MemoryModuleType.JOB_SITE), villager.hasAttached(Attachments.BOUND_SITE), isLocked(villager),
-				r == null ? -1 : r.firstSeenDay, r != null && r.born, couple, partner, parents,
+				Professions.type(villager), homeless, couple, partner, parents,
 				genealogy.childCount(uuid), genealogy.siblingCount(uuid)));
 	}
 

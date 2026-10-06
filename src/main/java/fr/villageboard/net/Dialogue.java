@@ -13,10 +13,12 @@ import java.util.UUID;
  * {@code line} garde ses variables ({joueur}, {nom}, {metier}, {village}, {conjoint}) : le client les remplace,
  * ce qui lui permet de traduire le métier.
  *
- * @param canTrade le villageois a des échanges : la boîte rappelle qu'un second clic droit les ouvre
+ * @param canTrade    le villageois a des échanges : la boîte rappelle qu'un second clic droit les ouvre
+ * @param jobSound    bruit du métier à la fin de la réplique
  */
 public record Dialogue(UUID villager, String name, String profession, String biome, boolean baby, String line,
-		String village, String spouse, String player, boolean canTrade) implements CustomPacketPayload {
+		String village, String spouse, String player, boolean canTrade, boolean jobSound)
+		implements CustomPacketPayload {
 
 	public static final Type<Dialogue> TYPE = new Type<>(VillageBoard.id("dialogue"));
 	public static final StreamCodec<RegistryFriendlyByteBuf, Dialogue> CODEC = StreamCodec.of(
@@ -33,11 +35,13 @@ public record Dialogue(UUID villager, String name, String profession, String bio
 		buf.writeUtf(spouse);
 		buf.writeUtf(player);
 		buf.writeBoolean(canTrade);
+		buf.writeBoolean(jobSound);
 	}
 
 	private static Dialogue read(FriendlyByteBuf buf) {
 		return new Dialogue(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
-				buf.readUtf(1024), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean());
+				buf.readUtf(1024), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
+				buf.readBoolean());
 	}
 
 	@Override

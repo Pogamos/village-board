@@ -1,8 +1,9 @@
 # Village Board
 
 Mod Fabric (client + serveur) pour Minecraft **26.2** : tableau de mairie (gazette, registre des villageois par métier,
-fiche avec renommer / localiser / verrouiller / réinitialiser), bornes qui délimitent le territoire, contrat de travail
-qui lie un villageois à un poste. Le joueur parle français ; l'interface et les messages passent par les fichiers de langue.
+fiche avec renommer / localiser / verrouiller / réinitialiser, besoins, carte du territoire, arbre des familles), bornes
+qui délimitent le territoire, contrat de travail et bail de logement, état civil avec mariages, répliques des villageois
+et fiche au commerce. Le joueur parle français ; l'interface et les messages passent par les fichiers de langue.
 
 ## Outils : tout passe par Docker
 La machine n'a que Java 8 et pas de Gradle. Ne pas lancer `./gradlew` ni `java` en local.
@@ -35,6 +36,9 @@ Pièges déjà rencontrés en 26.2 :
 - Permissions : `player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)`.
 - Jour de jeu : `level.getOverworldClockTime() / 24000`.
 - `FriendlyByteBuf::writeBlockPos` est ambigu en référence de méthode : écrire une lambda.
+- Événements d'écran Fabric (`ScreenEvents.afterExtract(screen)`, `remove(screen)`…) : ils sont **recréés à chaque init et à chaque
+  `resize`** (`resize` → `repositionElements` → `rebuildWidgets` → `init`). S'y réinscrire dans chaque `AFTER_INIT`, sans garde « déjà fait ».
+- Mixins côté client : classes dans `src/client/java/.../client/mixin`, déclarées dans `villageboard.client.mixins.json` (environnement client).
 
 ## Architecture
 - `src/main/java/fr/villageboard/` : code commun.
@@ -57,7 +61,8 @@ Pièges déjà rencontrés en 26.2 :
   - Tableau retiré (cassé ou disparu, vu par `validateBoards`) : `Village.boardMissing`, le village est conservé. Un tableau
     posé sur son territoire ou près de toutes ses bornes s'y rattache (`orphanFor`, `rebind`). Seul `/villageboard remove` dissout.
   - Répliques : `village/Dialogues` lit `config/villageboard/dialogues.txt` (copié depuis `resources/villageboard/dialogues_default.txt`,
-    relu quand sa date change). `VillageManager.talk` (appelé par `UseEntityCallback`) envoie `net/Dialogue` au premier clic et
+    relu quand sa date change ; remplacé quand le modèle change s'il n'a pas été retouché, voir `.dialogues_default.sha256`
+    et `PREVIOUS_DEFAULTS`, à compléter avec l'empreinte du modèle à chaque version qui le modifie). `VillageManager.talk` (appelé par `UseEntityCallback`) envoie `net/Dialogue` au premier clic et
     annule l'interaction ; un second clic sur le même villageois dans les 10 s laisse vanilla ouvrir les échanges.
   - Couples : `Kin.spouse` (+ `divorced`, `widowed`), règles dans `Genealogy.allowed` (conjoint exclusif, pas de parent/enfant
     ni de frères et sœurs). Le mixin note le villageois dont le cerveau tourne (`customServerAiStep`) et fait renvoyer `false` à
@@ -70,7 +75,8 @@ Pièges déjà rencontrés en 26.2 :
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
   `FamilyTree` (arbre d'un villageois), `VillageTree` (onglet Familles : arbre de tout le village, zoom et déplacement),
   `DialogueBox` (réplique en bas de l'écran, élément du HUD Fabric : `HudElementRegistry`), `TradeCard` (fiche à côté de la fenêtre de commerce : le mixin sur `Villager.startTrading` fait envoyer `net/VillagerCard`,
-  dessinée via `ScreenEvents.afterExtract` du `MerchantScreen`), `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
+  dessinée via `ScreenEvents.afterExtract` du `MerchantScreen` ; la fenêtre de commerce est décalée par
+  `client/mixin/MerchantScreenMixin`, déclaré dans `villageboard.client.mixins.json`, qui ne s'applique que côté client), `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
   `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
 - Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
 - La gazette stocke un **type + des arguments**, jamais du texte : le client compose la phrase dans sa langue (`Texts.news`).

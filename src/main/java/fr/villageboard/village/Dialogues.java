@@ -9,17 +9,23 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * Répliques des villageois, lues dans config/villageboard/dialogues.txt. Le fichier est créé avec des exemples au
  * premier lancement, puis relu automatiquement dès qu'il est modifié (pas besoin de redémarrer).
+ * Quand le modèle fourni avec le mod change, le fichier est remplacé s'il n'a pas été retouché à la main ; sinon,
+ * la nouvelle version est écrite à côté (dialogues.txt.nouveau) pour ne rien écraser.
  * <p>
  * Format : une réplique par ligne, rangées sous des sections [nom] ; # commence un commentaire. Sections reconnues :
  * [tous], [enfant], un métier ([fermier], [bibliothecaire]… ou l'identifiant vanilla [farmer]), et des situations :
@@ -65,14 +71,73 @@ final class Dialogues {
 			Map.entry("night", "nuit"),
 			Map.entry("rain", "pluie"));
 
+	/** Empreintes (SHA-256, fins de ligne normalisées) des modèles livrés par les versions précédentes du mod. */
+	private static final Set<String> PREVIOUS_DEFAULTS = Set.of(
+			"54acf0c762f607dffda926c9f05664b9c0286469b31457b3ac435e135df663da"); // v0.11.0
+
+	private static final int MAX_LINE = 500;
+
 	private final Path file = FabricLoader.getInstance().getConfigDir().resolve("villageboard").resolve("dialogues.txt");
+	/** Empreinte du modèle copié en dernier dans {@link #file}. */
+	private final Path installedHash = file.resolveSibling(".dialogues_default.sha256");
 	private final Map<String, List<String>> sections = new HashMap<>();
 	private final Random random = new Random();
 	private FileTime loadedAt;
 
-	/** Crée le fichier d'exemples s'il n'existe pas, puis le lit. */
+	/** Installe ou met à jour le fichier d'exemples, puis le lit. */
 	void load() {
+		try {
+			installDefault();
+		} catch (IOException e) {
+			VillageBoard.LOGGER.error("Impossible d'installer {}", file, e);
+		}
 		reloadIfChanged();
+	}
+
+	/**
+	 * Copie le modèle du mod dans la config s'il n'y est pas, ou s'il a changé depuis la dernière copie et que le
+	 * fichier n'a pas été modifié à la main entre-temps.
+	 */
+	private void installDefault() throws IOException {
+		byte[] bundled;
+		try (InputStream in = Dialogues.class.getResourceAsStream("/villageboard/dialogues_default.txt")) {
+			if (in == null) {
+				return;
+			}
+			bundled = in.readAllBytes();
+		}
+		String bundledHash = hash(bundled);
+		Files.createDirectories(file.getParent());
+		if (!Files.exists(file)) {
+			Files.write(file, bundled);
+			Files.writeString(installedHash, bundledHash);
+			return;
+		}
+		String installed = Files.exists(installedHash) ? Files.readString(installedHash).strip() : null;
+		if (bundledHash.equals(installed)) {
+			return;
+		}
+		String current = hash(Files.readAllBytes(file));
+		boolean untouched = current.equals(installed) || installed == null && PREVIOUS_DEFAULTS.contains(current);
+		if (untouched) {
+			Files.write(file, bundled);
+			VillageBoard.LOGGER.info("{} mis à jour avec les nouvelles répliques du mod", file);
+		} else if (!current.equals(bundledHash)) {
+			Path fresh = file.resolveSibling("dialogues.txt.nouveau");
+			Files.write(fresh, bundled);
+			VillageBoard.LOGGER.warn("{} a été modifié à la main : les nouvelles répliques du mod sont dans {}", file, fresh);
+		}
+		Files.writeString(installedHash, bundledHash);
+	}
+
+	/** SHA-256 du texte, fins de ligne Windows ramenées à \n. */
+	private static String hash(byte[] content) {
+		try {
+			String text = new String(content, StandardCharsets.UTF_8).replace("\r\n", "\n");
+			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	/** Une réplique au hasard pour ce villageois (différente de {@code previous} si possible), ou null s'il n'y en a aucune. */
@@ -128,12 +193,7 @@ final class Dialogues {
 	private void reloadIfChanged() {
 		try {
 			if (!Files.exists(file)) {
-				Files.createDirectories(file.getParent());
-				try (InputStream in = Dialogues.class.getResourceAsStream("/villageboard/dialogues_default.txt")) {
-					if (in != null) {
-						Files.write(file, in.readAllBytes());
-					}
-				}
+				installDefault();
 			}
 			FileTime modified = Files.getLastModifiedTime(file);
 			if (modified.equals(loadedAt)) {
@@ -158,6 +218,10 @@ final class Dialogues {
 			if (line.startsWith("[") && line.endsWith("]")) {
 				current = key(line.substring(1, line.length() - 1));
 				continue;
+			}
+			// Une réplique doit tenir dans le paquet réseau (1024 caractères) : on coupe les lignes démesurées.
+			if (line.length() > MAX_LINE) {
+				line = line.substring(0, MAX_LINE);
 			}
 			sections.computeIfAbsent(current, k -> new ArrayList<>()).add(line);
 		}

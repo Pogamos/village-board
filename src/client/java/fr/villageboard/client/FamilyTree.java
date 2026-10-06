@@ -214,7 +214,11 @@ final class FamilyTree {
 		if (people.size() > perRow) {
 			List<KinView> first = new ArrayList<>(people.subList(0, perRow - 1));
 			if (keep != null && !first.contains(keep)) {
-				first.set(first.size() - 1, keep);
+				if (first.isEmpty()) {
+					first.add(keep);
+				} else {
+					first.set(first.size() - 1, keep);
+				}
 			}
 			shown = first;
 			hidden = people.stream().filter(p -> !first.contains(p)).toList();

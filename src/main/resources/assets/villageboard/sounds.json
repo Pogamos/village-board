@@ -1,0 +1,8 @@
+{
+  "villager.babble": {
+    "sounds": [
+      "minecraft:mob/villager/idle3"
+    ],
+    "subtitle": "subtitles.entity.villager.ambient"
+  }
+}

@@ -319,9 +319,8 @@
   "villageboard.gui.divorce": "[divorcer]",
   "villageboard.gui.divorce.confirm": "[confirmer le divorce]",
   "villageboard.gui.single": "Célibataire",
-  "villageboard.card.no_village": "Hors de tout village",
-  "villageboard.card.village": "Village : %s",
   "villageboard.card.homeless": "Sans abri",
   "villageboard.card.kin": "Enfants : %s · Fratrie : %s",
-  "villageboard.dialogue.trade": "Clic droit : échanger"
+  "villageboard.dialogue.trade": "Clic droit : échanger",
+  "villageboard.card.housed": "A un lit"
 }

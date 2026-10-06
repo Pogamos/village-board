@@ -18,20 +18,24 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   [papier][cloche][papier]        [teinture jaune]                 papier + plume + poche d'encre
                                                                  Bail de logement (sans forme)
                                                                  papier + plume + poche d'encre + laine
-  [planches ×3]                   [pierre taillée sculptée]
-  [bâton]   [ ]   [bâton]         [muret de pierre taillée]
+  [planches ×3]                   [pierre taillée sculptée]      Acte de mariage (sans forme)
+  [bâton]   [ ]   [bâton]         [muret de pierre taillée]        papier + plume + poche d'encre + pépite d'or
 ```
 
 ### Le tableau (clic droit)
-- **Gazette** : naissances (avec les parents), décès (avec la cause), prises et pertes d'emploi, arrivées,
-  déménagements, villageois changés en zombie ou en sorcière, guérisons, renommages, évolution du territoire.
-- **Habitants** : liste rangée par catégorie (tous, enfants, sans emploi, chaque métier, niais). Un clic sur un villageois ouvre sa fiche :
-  portrait animé, métier, niveau, santé, expérience, position, poste de travail, lit, date d'arrivée ou de naissance.
+- **Gazette** : naissances (avec les parents), décès (avec la cause), prises et pertes d'emploi, arrivées, départs,
+  déménagements, villageois changés en zombie ou en sorcière, guérisons, renommages, contrats et baux, mariages et
+  divorces, logement complet ou libéré, évolution du territoire, tableau démonté ou déplacé.
+- **Habitants** : liste rangée par catégorie (tous, enfants, sans abri, sans emploi, chaque métier, niais). Un clic sur un
+  villageois ouvre sa fiche : portrait animé, métier, niveau, santé, expérience, position, poste de travail, lit, date
+  d'arrivée ou de naissance, famille (avec un lien vers son arbre) et conjoint.
   - **Renommer** : son nom s'affiche au-dessus de sa tête, comme avec un nametag. Laisser vide retire le nom.
   - **Localiser** : contour doré visible à travers les murs, et boussole dans la barre d'action pendant 30 s.
   - **Verrouiller** : le métier ne change plus, même si le poste de travail disparaît. Le villageois n'est **pas** lié à un
     poste précis : il peut changer de poste du même métier. Pour l'attacher à un poste, utilisez un contrat de travail.
   - **Réinitialiser** : le villageois quitte son poste, qui est libéré, perd son XP et ses échanges, puis cherche un nouveau travail.
+- **Familles** : arbre généalogique de tout le village (voir « Généalogie »).
+- **Besoins** : ce qui manque au village (voir « Besoins du village »).
 - **Territoire** : carte interactive peinte d'après le terrain (comme une carte vanilla) : territoire teinté et cerné,
   villages voisins en bleu, bornes, mairie, habitants colorés par statut, liens vers les postes attitrés, position du joueur.
   Molette = zoom, glisser = déplacer, survol = nom, boutons + / − / recentrer / filtres / aide.
@@ -45,12 +49,20 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
 ### Parler aux villageois
 Un clic droit sur un villageois (mains vides ou objet ordinaire) ne lance plus directement les échanges : il dit d'abord
 une **réplique**, affichée dans une boîte en bas de l'écran (tête, nom, métier, texte qui s'écrit lettre par lettre).
+Pendant que la réplique s'écrit, le villageois babille : le « hmm » *idle3* des villageois, répété toutes les quelques
+lettres, avec sa propre hauteur de voix (plus aiguë pour un enfant), plus haut sur une question ou une exclamation,
+plus bas sur « … ».
+À la fin, un villageois qui a un métier fait le bruit de son travail (page tournée, enclume, seau…) ; `"jobSound": false`
+dans la config le désactive.
 Un **second clic droit** sur lui dans les 10 secondes ouvre les échanges. Accroupi + clic droit ouvre les échanges
 directement ; une étiquette, une laisse ou un œuf d'apparition gardent leur effet normal. Les enfants, niais et
 sans-emploi parlent aussi (à chaque clic).
 
-Les répliques sont dans **`config/villageboard/dialogues.txt` sur le serveur** (créé avec des exemples au premier lancement,
-relu automatiquement à chaque modification) :
+Les répliques sont dans **`config/villageboard/dialogues.txt` sur le serveur** (en solo : dans le dossier `config` du jeu).
+Il est créé avec des exemples au premier lancement et relu automatiquement à chaque modification. Quand une nouvelle
+version du mod apporte d'autres exemples (`src/main/resources/villageboard/dialogues_default.txt`), le fichier est
+remplacé s'il n'a pas été retouché à la main ; sinon il est gardé tel quel et la nouvelle version est écrite à côté,
+dans `dialogues.txt.nouveau`.
 
 ```
 [tous]
@@ -67,10 +79,9 @@ Sections : `[tous]`, `[enfant]`, un métier (`[fermier]`, `[bibliothecaire]`… 
 La réplique est tirée au hasard parmi toutes les sections qui concernent le villageois, sans répéter la précédente.
 
 ### Fiche au commerce
-Quand on ouvre les échanges d'un villageois (clic droit), une petite fiche s'affiche à côté de la fenêtre de commerce :
-sa tête, son nom, son métier et son niveau, sa santé, son village, son lit et son poste (en doré s'ils sont attitrés),
-le verrou, son conjoint, ses parents, ses enfants, ses frères et sœurs, et depuis quand il est au village. Elle se place
-à gauche de la fenêtre, à droite s'il manque de place ; si l'écran est trop étroit (grande échelle d'interface), elle n'apparaît pas.
+Quand les échanges d'un villageois s'ouvrent, une petite fiche s'épingle à gauche de la fenêtre de commerce, qui se
+décale vers la droite pour lui faire de la place : sa tête, son nom, son métier, s'il a un lit ou s'il est sans abri,
+et sa famille (conjoint ou célibataire, parents, nombre d'enfants et de frères et sœurs).
 
 ### Généalogie
 Le mod tient un **état civil** : à chaque naissance, il note les deux parents. Ces entrées sont gardées après la mort ou
@@ -119,7 +130,8 @@ Les postes de travail apparaissent aussi sur la carte : libres en cyan, occupés
 
 ### Logement
 - Les lits du territoire apparaissent sur la carte : verts s'ils sont libres, rouges s'ils sont occupés. Au survol d'un lit,
-  on voit son occupant ; au survol d'un habitant, un trait bleu le relie à son lit. Un clic sur un lit ouvre la fiche de son occupant.
+  on voit son occupant ; au survol d'un habitant, un trait bleu le relie à son lit. Un clic sur un lit l'épingle et
+  montre son occupant, avec un lien vers sa fiche.
 - L'onglet Territoire résume le logement : nombre de lits, lits libres, nombre de sans-abri.
 - La catégorie **Sans abri** de l'onglet Habitants liste les villageois sans lit. Dans chaque fiche, le lit s'affiche avec un lien **[carte]**.
 - La gazette annonce quand il ne reste **plus aucun lit libre** (les villageois ne peuvent alors plus avoir d'enfants),
@@ -185,17 +197,21 @@ Les textures sont générées par `tools/GenTextures.java` :
 ```
 src/main/java/fr/villageboard/        commun (serveur + client)
 ├── block/      tableau de la mairie, borne
-├── village/    VillageManager (registre, bornes, gazette), Genealogy + Kin (état civil), VillagerActions,
-│               Assignments (poste et lit attitrés), Facilities (lits, postes, cloches),
-│               Territory (polygone), événements, commande
-├── item/       contrat de travail, bail de logement
-├── net/        paquets réseau (vue du tableau, frontières, actions)
-└── mixin/      VillagerMixin : changements de métier (verrou + gazette), naissances
+├── village/    VillageManager (registre, bornes, gazette), Genealogy + Kin (état civil, couples), Marriages,
+│               Dialogues (répliques), VillagerActions, Assignments (poste et lit attitrés),
+│               Facilities (lits, postes, cloches), Territory (polygone), événements, commande
+├── item/       contrat de travail, bail de logement, acte de mariage
+├── net/        paquets réseau (vue du tableau, frontières, actions, réplique, fiche au commerce)
+└── mixin/      VillagerMixin : changements de métier (verrou + gazette), naissances, couples, ouverture du commerce
 src/client/java/fr/villageboard/client/
 ├── BoardScreen.java      l'écran du tableau
 ├── TerritoryMap.java     la carte interactive du territoire
+├── FamilyTree.java       arbre d'un villageois ; VillageTree.java : arbre de tout le village
+├── VillagerFace.java     tête d'un villageois dessinée d'après les textures vanilla
+├── DialogueBox.java      réplique en bas de l'écran ; TradeCard.java : fiche à côté du commerce
 ├── VillageNeeds.java     calcul des besoins du village
-└── BorderDisplay.java    particules des frontières, message d'entrée/sortie
+├── BorderDisplay.java    particules des frontières, message d'entrée/sortie
+└── mixin/                décalage de la fenêtre de commerce
 ```
 
 L'ancien plugin Paper est archivé dans `archive/paper-plugin/`.

@@ -23,6 +23,8 @@ public final class Config {
 	public int leaveDelaySeconds = 60;
 	/** « everyone » : tout le monde gère les villageois ; « founder » : le fondateur et les opérateurs. */
 	public String managers = "everyone";
+	/** À la fin de sa réplique, un villageois qui a un métier fait le bruit de son travail. */
+	public boolean jobSound = true;
 
 	private static Config instance = new Config();
 
@@ -30,8 +32,12 @@ public final class Config {
 		return instance;
 	}
 
+	private static Path file() {
+		return FabricLoader.getInstance().getConfigDir().resolve("villageboard.json");
+	}
+
 	static void load() {
-		Path file = FabricLoader.getInstance().getConfigDir().resolve("villageboard.json");
+		Path file = file();
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		try {
 			if (Files.exists(file)) {

@@ -11,7 +11,10 @@
 		"main": ["fr.villageboard.VillageBoard"],
 		"client": ["fr.villageboard.client.VillageBoardClient"]
 	},
-	"mixins": ["villageboard.mixins.json"],
+	"mixins": [
+		"villageboard.mixins.json",
+		{"config": "villageboard.client.mixins.json", "environment": "client"}
+	],
 	"depends": {
 		"fabricloader": ">=0.19.3",
 		"minecraft": "~26.2",
