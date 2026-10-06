@@ -1,0 +1,35 @@
+services:
+  # Compilation : docker compose run --rm build
+  build:
+    image: gradle:9-jdk25
+    working_dir: /project
+    volumes:
+      - .:/project
+      - gradle-cache:/home/gradle/.gradle
+    command: gradle --no-daemon build
+    profiles: ["build"]
+
+  # Serveur de test : docker compose up -d minecraft
+  minecraft:
+    image: itzg/minecraft-server:java25
+    container_name: villageboard-mc
+    ports:
+      - "25565:25565"
+    environment:
+      # Accepter le CLUF de Minecraft : https://aka.ms/MinecraftEULA
+      EULA: "TRUE"
+      TYPE: PAPER
+      VERSION: "26.2"
+      MEMORY: 2G
+      DIFFICULTY: normal
+      # Ton pseudo Minecraft pour être opérateur (ou : docker exec villageboard-mc rcon-cli op <pseudo>)
+      OPS: ${MC_OPS:-}
+    volumes:
+      - ./server-data:/data
+      # Le plugin compilé est copié dans /data/plugins à chaque démarrage
+      - ./build/libs:/plugins:ro
+    stdin_open: true
+    tty: true
+
+volumes:
+  gradle-cache:

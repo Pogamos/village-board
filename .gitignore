@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# Fabric / serveurs de test (Docker)
+run/
+server-data/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# Divers
+*.log
+*.tmp
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+.DS_Store
+Thumbs.db

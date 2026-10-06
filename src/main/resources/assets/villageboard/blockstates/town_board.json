@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "villageboard:block/town_board" },
+    "facing=east": { "model": "villageboard:block/town_board", "y": 90 },
+    "facing=south": { "model": "villageboard:block/town_board", "y": 180 },
+    "facing=west": { "model": "villageboard:block/town_board", "y": 270 }
+  }
+}

@@ -1,0 +1,21 @@
+{
+	"schemaVersion": 1,
+	"id": "villageboard",
+	"version": "${version}",
+	"name": "Village Board",
+	"description": "Un tableau de mairie pour gérer les villageois de son village : gazette, registre des habitants, bornes de territoire.",
+	"authors": ["lucas"],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["fr.villageboard.VillageBoard"],
+		"client": ["fr.villageboard.client.VillageBoardClient"]
+	},
+	"mixins": ["villageboard.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

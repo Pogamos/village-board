@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
+      "entries": [ { "type": "minecraft:item", "name": "villageboard:boundary_stone" } ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "villageboard:blocks/boundary_stone"
+}

@@ -1,0 +1,23 @@
+name: VillageBoard
+version: '${version}'
+main: fr.villageboard.VillageBoardPlugin
+api-version: '26.2'
+description: Tableau de mairie pour gérer les villageois d'un village.
+authors: [lucas]
+
+commands:
+  villageboard:
+    description: Gère les tableaux de mairie.
+    aliases: [vb, mairie]
+    usage: /<command> [create|open|list|radius|remove]
+
+permissions:
+  villageboard.use:
+    description: Consulter le tableau de la mairie.
+    default: true
+  villageboard.manage:
+    description: Renommer, localiser, verrouiller et réinitialiser les villageois.
+    default: true
+  villageboard.admin:
+    description: Créer et supprimer des tableaux de mairie.
+    default: op

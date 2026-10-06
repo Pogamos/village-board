@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "villageboard:block/boundary_stone"
+  }
+}

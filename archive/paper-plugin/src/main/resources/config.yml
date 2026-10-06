@@ -1,0 +1,14 @@
+# Rayon (en blocs, horizontal) d'un village autour de son tableau de mairie.
+default-radius: 96
+
+# Fréquence du recensement des villageois chargés.
+scan-interval-seconds: 10
+
+# Nombre maximum d'actualités conservées par village.
+news-max-entries: 200
+
+# Durée du contour lumineux quand on localise un villageois.
+locate-glow-seconds: 30
+
+# Donne automatiquement un prénom aux villageois sans nom.
+auto-names: true

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": "minecraft:paper",
+    "W": "#minecraft:planks",
+    "B": "minecraft:bell",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    "PBP",
+    "WWW",
+    "S S"
+  ],
+  "result": { "id": "villageboard:town_board" }
+}

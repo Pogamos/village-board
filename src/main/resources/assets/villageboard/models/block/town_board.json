@@ -1,0 +1,52 @@
+{
+  "parent": "block/block",
+  "display": {
+    "gui": { "rotation": [ 30, 200, 0 ], "translation": [ 0, -1, 0 ], "scale": [ 0.6, 0.6, 0.6 ] }
+  },
+  "textures": {
+    "particle": "minecraft:block/spruce_planks",
+    "front": "villageboard:block/town_board_front",
+    "planks": "minecraft:block/spruce_planks",
+    "post": "minecraft:block/stripped_spruce_log",
+    "roof": "minecraft:block/dark_oak_planks"
+  },
+  "elements": [
+    {
+      "from": [ 1.5, 0, 7.25 ], "to": [ 3.5, 4, 8.75 ],
+      "faces": {
+        "north": { "uv": [ 0, 12, 2, 16 ], "texture": "#post" },
+        "south": { "uv": [ 0, 12, 2, 16 ], "texture": "#post" },
+        "east": { "uv": [ 0, 12, 1.5, 16 ], "texture": "#post" },
+        "west": { "uv": [ 0, 12, 1.5, 16 ], "texture": "#post" },
+        "down": { "texture": "#post", "cullface": "down" }
+      }
+    },
+    {
+      "from": [ 12.5, 0, 7.25 ], "to": [ 14.5, 4, 8.75 ],
+      "faces": {
+        "north": { "uv": [ 0, 12, 2, 16 ], "texture": "#post" },
+        "south": { "uv": [ 0, 12, 2, 16 ], "texture": "#post" },
+        "east": { "uv": [ 0, 12, 1.5, 16 ], "texture": "#post" },
+        "west": { "uv": [ 0, 12, 1.5, 16 ], "texture": "#post" },
+        "down": { "texture": "#post", "cullface": "down" }
+      }
+    },
+    {
+      "from": [ 0, 4, 7 ], "to": [ 16, 16, 9 ],
+      "faces": {
+        "north": { "uv": [ 0, 0, 16, 12 ], "texture": "#front" },
+        "south": { "texture": "#planks" },
+        "east": { "texture": "#planks" }, "west": { "texture": "#planks" },
+        "up": { "texture": "#planks" }, "down": { "texture": "#planks" }
+      }
+    },
+    {
+      "from": [ -1, 16, 6 ], "to": [ 17, 17, 10 ],
+      "faces": {
+        "north": { "texture": "#roof" }, "south": { "texture": "#roof" },
+        "east": { "texture": "#roof" }, "west": { "texture": "#roof" },
+        "up": { "texture": "#roof" }, "down": { "texture": "#roof" }
+      }
+    }
+  ]
+}

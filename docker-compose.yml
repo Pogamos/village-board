@@ -1,0 +1,37 @@
+services:
+  # Compilation : docker compose run --rm build   →   build/libs/villageboard-<version>.jar
+  build:
+    image: gradle:9-jdk25
+    working_dir: /project
+    volumes:
+      - .:/project
+      - gradle-cache:/home/gradle/.gradle
+    command: gradle --no-daemon build
+    profiles: ["build"]
+
+  # Serveur Fabric de test : docker compose up -d minecraft
+  minecraft:
+    image: itzg/minecraft-server:java25
+    container_name: villageboard-fabric
+    ports:
+      - "25565:25565"
+    environment:
+      # Accepter le CLUF de Minecraft : https://aka.ms/MinecraftEULA
+      EULA: "TRUE"
+      TYPE: FABRIC
+      VERSION: "26.2"
+      FABRIC_LOADER_VERSION: "0.19.3"
+      MODRINTH_PROJECTS: "fabric-api"
+      MEMORY: 2G
+      DIFFICULTY: normal
+      # Ton pseudo Minecraft pour être opérateur (ou : docker exec villageboard-fabric rcon-cli op <pseudo>)
+      OPS: ${MC_OPS:-}
+    volumes:
+      - ./server-data:/data
+      # Le mod compilé est copié dans /data/mods à chaque démarrage
+      - ./build/libs:/mods:ro
+    stdin_open: true
+    tty: true
+
+volumes:
+  gradle-cache:

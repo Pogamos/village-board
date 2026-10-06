@@ -1,0 +1,809 @@
+package fr.villageboard.village;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import fr.villageboard.Config;
+import fr.villageboard.VillageBoard;
+import fr.villageboard.block.ModBlocks;
+import fr.villageboard.net.BoardView;
+import fr.villageboard.net.BorderView;
+import fr.villageboard.net.Payloads;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * Registre des villages, côté serveur. Une instance par serveur en cours d'exécution ; toutes les méthodes
+ * s'exécutent sur le thread du serveur. Sauvegardé dans &lt;monde&gt;/villageboard/villages.json.
+ */
+public final class VillageManager {
+
+	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final Type DATA_TYPE = new TypeToken<LinkedHashMap<String, Village>>() {
+	}.getType();
+	private static final double BOARD_REACH_SQ = 8 * 8;
+	private static final int MAX_BORNES = 64;
+	private static final int AUTOSAVE_TICKS = 60 * 20;
+	private static final int BOUND_CHECK_TICKS = 40;
+
+	private static VillageManager instance;
+
+	private final MinecraftServer server;
+	private final Path file;
+	private final Config config = Config.get();
+	private final Map<String, Village> villages = new LinkedHashMap<>();
+	/** Village auquel appartient chaque villageois recensé. */
+	private final Map<UUID, Village> index = new HashMap<>();
+	/** Parents d'un bébé, entre sa création et son apparition dans le monde. */
+	private final Map<UUID, String> pendingParents = new HashMap<>();
+	private final VillagerActions actions;
+	private final WorkAssignments assignments;
+	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
+	boolean bypassFreeze;
+	private int ticks;
+
+	private VillageManager(MinecraftServer server) {
+		this.server = server;
+		this.file = server.getWorldPath(LevelResource.ROOT).resolve("villageboard").resolve("villages.json");
+		this.actions = new VillagerActions(this, server);
+		this.assignments = new WorkAssignments(this, server);
+	}
+
+	public static VillageManager get() {
+		return instance;
+	}
+
+	static void start(MinecraftServer server) {
+		instance = new VillageManager(server);
+		instance.load();
+	}
+
+	static void stop() {
+		if (instance != null) {
+			instance.actions.cleanup();
+			instance.save(true);
+			instance = null;
+		}
+	}
+
+	// ------------------------------------------------------------------ persistance
+
+	private void load() {
+		if (!Files.exists(file)) {
+			return;
+		}
+		try {
+			Map<String, Village> data = GSON.fromJson(Files.readString(file, StandardCharsets.UTF_8), DATA_TYPE);
+			if (data != null) {
+				villages.putAll(data);
+				for (Village v : villages.values()) {
+					v.villagers.keySet().forEach(uuid -> index.put(UUID.fromString(uuid), v));
+				}
+			}
+			VillageBoard.LOGGER.info("{} village(s) chargé(s)", villages.size());
+		} catch (IOException | RuntimeException e) {
+			VillageBoard.LOGGER.error("Impossible de lire {}", file, e);
+		}
+	}
+
+	void save(boolean force) {
+		if (!force && villages.values().stream().noneMatch(v -> v.dirty)) {
+			return;
+		}
+		try {
+			Files.createDirectories(file.getParent());
+			Path tmp = file.resolveSibling("villages.json.tmp");
+			Files.writeString(tmp, GSON.toJson(villages, DATA_TYPE), StandardCharsets.UTF_8);
+			Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			villages.values().forEach(v -> v.dirty = false);
+		} catch (IOException e) {
+			VillageBoard.LOGGER.error("Impossible d'enregistrer {}", file, e);
+		}
+	}
+
+	void tick() {
+		ticks++;
+		if (ticks % (config.scanIntervalSeconds * 20) == 0) {
+			scan();
+		}
+		if (ticks % BOUND_CHECK_TICKS == 0) {
+			assignments.maintain();
+		}
+		if (ticks % AUTOSAVE_TICKS == 0) {
+			save(false);
+		}
+		actions.tick(ticks);
+	}
+
+	// ------------------------------------------------------------------ recherche
+
+	public Collection<Village> villages() {
+		return villages.values();
+	}
+
+	public Village village(String id) {
+		return villages.get(id);
+	}
+
+	static String dim(Level level) {
+		return level.dimension().identifier().toString();
+	}
+
+	ServerLevel level(String dimension) {
+		return server.getLevel(ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)));
+	}
+
+	/** Le village dont le territoire contient ce point (le plus proche de son tableau en cas de chevauchement). */
+	public Village villageAt(String dimension, double x, double z) {
+		Village best = null;
+		double bestDist = Double.POSITIVE_INFINITY;
+		for (Village v : villages.values()) {
+			if (v.contains(dimension, x, z, config.defaultRadius)) {
+				double d = v.boardPos().distToCenterSqr(x, v.boardPos().getY(), z);
+				if (d < bestDist) {
+					best = v;
+					bestDist = d;
+				}
+			}
+		}
+		return best;
+	}
+
+	public Village boardAt(Level level, BlockPos pos) {
+		String dimension = dim(level);
+		long key = pos.asLong();
+		for (Village v : villages.values()) {
+			if (v.board == key && v.dimension.equals(dimension)) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	private Village villageOfBorne(Level level, BlockPos pos) {
+		String dimension = dim(level);
+		for (Village v : villages.values()) {
+			if (v.dimension.equals(dimension) && v.bornes.contains(pos.asLong())) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	public Village villageOf(UUID villager) {
+		return index.get(villager);
+	}
+
+	public VillagerRecord record(UUID villager) {
+		Village v = index.get(villager);
+		return v == null ? null : v.villagers.get(villager.toString());
+	}
+
+	/** Le villageois s'il est actuellement chargé. */
+	Villager live(VillagerRecord r) {
+		ServerLevel level = r.dimension == null ? null : level(r.dimension);
+		if (level == null) {
+			return null;
+		}
+		return level.getEntity(UUID.fromString(r.uuid)) instanceof Villager v && v.isAlive() ? v : null;
+	}
+
+	// ------------------------------------------------------------------ droits
+
+	boolean isFounderOrOp(ServerPlayer player, Village v) {
+		return player.getUUID().toString().equals(v.founder)
+				|| player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+	}
+
+	boolean canManage(ServerPlayer player, Village v) {
+		return "everyone".equalsIgnoreCase(config.managers) || isFounderOrOp(player, v);
+	}
+
+	// ------------------------------------------------------------------ tableau & bornes
+
+	public boolean canFound(ServerLevel level, BlockPos pos, Player player) {
+		Village other = villageAt(dim(level), pos.getX() + 0.5, pos.getZ() + 0.5);
+		if (other != null) {
+			if (player instanceof ServerPlayer serverPlayer) {
+				serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.inside_territory", other.name));
+			}
+			return false;
+		}
+		return true;
+	}
+
+	public void found(ServerLevel level, BlockPos pos, LivingEntity placer, ItemStack stack) {
+		if (boardAt(level, pos) != null) {
+			return;
+		}
+		Village v = new Village();
+		v.id = UUID.randomUUID().toString().substring(0, 8);
+		String founderName = placer instanceof Player p ? p.getPlainTextName() : "?";
+		Component custom = stack.getCustomName();
+		v.name = custom != null ? clean(custom.getString()) : "Village de " + founderName;
+		v.dimension = dim(level);
+		v.board = pos.asLong();
+		v.founder = placer == null ? "" : placer.getUUID().toString();
+		v.founderName = founderName;
+		v.foundedAt = System.currentTimeMillis();
+		villages.put(v.id, v);
+		for (Villager villager : level.getEntities(EntityTypes.VILLAGER, Entity::isAlive)) {
+			if (!index.containsKey(villager.getUUID()) && v.contains(v.dimension, villager.getX(), villager.getZ(), config.defaultRadius)) {
+				register(v, villager);
+			}
+		}
+		news(v, NewsType.FOUNDED, v.name, String.valueOf(v.villagers.size()));
+		save(true);
+		broadcastBorders();
+		if (placer instanceof ServerPlayer player) {
+			player.sendSystemMessage(Component.translatable("villageboard.msg.founded",
+					v.name, v.villagers.size(), config.defaultRadius));
+		}
+	}
+
+	public void addBorne(ServerLevel level, BlockPos pos, LivingEntity placer) {
+		ServerPlayer player = placer instanceof ServerPlayer p ? p : null;
+		String dimension = dim(level);
+		Village best = null;
+		double bestDist = (double) config.maxBorneDistance * config.maxBorneDistance;
+		for (Village v : villages.values()) {
+			if (v.dimension.equals(dimension)) {
+				double d = v.boardPos().distToCenterSqr(pos.getX() + 0.5, v.boardPos().getY(), pos.getZ() + 0.5);
+				if (d <= bestDist) {
+					best = v;
+					bestDist = d;
+				}
+			}
+		}
+		if (best == null) {
+			message(player, Component.translatable("villageboard.msg.borne_orphan", config.maxBorneDistance));
+			return;
+		}
+		if (player != null && !canManage(player, best)) {
+			message(player, Component.translatable("villageboard.msg.no_permission"));
+			return;
+		}
+		if (best.bornes.size() >= MAX_BORNES) {
+			message(player, Component.translatable("villageboard.msg.borne_max", MAX_BORNES));
+			return;
+		}
+		best.bornes.add(pos.asLong());
+		best.bornesChanged();
+		int count = best.bornes.size();
+		news(best, NewsType.TERRITORY, String.valueOf(count));
+		broadcastBorders();
+		message(player, Component.translatable("villageboard.msg.borne_added", count, best.name));
+		if (count < 3) {
+			message(player, Component.translatable("villageboard.msg.borne_more", 3 - count));
+		} else if (!best.contains(dimension, best.boardPos().getX() + 0.5, best.boardPos().getZ() + 0.5, config.defaultRadius)) {
+			message(player, Component.translatable("villageboard.msg.board_outside"));
+		}
+	}
+
+	/** @return false pour empêcher le joueur de casser ce bloc */
+	boolean allowBreak(Level level, Player player, BlockPos pos) {
+		if (!(player instanceof ServerPlayer serverPlayer)) {
+			return true;
+		}
+		Village board = boardAt(level, pos);
+		if (board != null && !isFounderOrOp(serverPlayer, board)) {
+			serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.board_protected", board.founderName));
+			return false;
+		}
+		Village borne = villageOfBorne(level, pos);
+		if (borne != null && !canManage(serverPlayer, borne)) {
+			serverPlayer.sendOverlayMessage(Component.translatable("villageboard.msg.no_permission"));
+			return false;
+		}
+		return true;
+	}
+
+	void afterBreak(Level level, Player player, BlockPos pos) {
+		Village board = boardAt(level, pos);
+		if (board != null) {
+			dissolve(board);
+			message(player instanceof ServerPlayer p ? p : null, Component.translatable("villageboard.msg.dissolved", board.name));
+			return;
+		}
+		Village borne = villageOfBorne(level, pos);
+		if (borne != null) {
+			borne.bornes.remove(pos.asLong());
+			borne.bornesChanged();
+			news(borne, NewsType.TERRITORY, String.valueOf(borne.bornes.size()));
+			broadcastBorders();
+		}
+	}
+
+	void dissolve(Village village) {
+		villages.remove(village.id);
+		village.villagers.keySet().forEach(uuid -> index.remove(UUID.fromString(uuid)));
+		save(true);
+		broadcastBorders();
+	}
+
+	public void openBoard(ServerPlayer player, BlockPos pos) {
+		Village v = boardAt(player.level(), pos);
+		if (v == null) {
+			// Tableau sans village (registre perdu, ou posé par commande) : on le refonde.
+			if (!canFound(player.level(), pos, player)) {
+				return;
+			}
+			found(player.level(), pos, player, ItemStack.EMPTY);
+			v = boardAt(player.level(), pos);
+		}
+		sendView(player, v);
+	}
+
+	void sendView(ServerPlayer player, Village v) {
+		if (!ServerPlayNetworking.canSend(player, Payloads.OpenBoard.TYPE)) {
+			player.sendSystemMessage(Component.literal("Installe le mod Village Board pour consulter le tableau de la mairie."));
+			return;
+		}
+		ServerPlayNetworking.send(player, new Payloads.OpenBoard(view(v, player)));
+	}
+
+	private BoardView view(Village v, ServerPlayer player) {
+		List<BoardView.VillagerView> list = new ArrayList<>();
+		for (VillagerRecord r : v.villagers.values()) {
+			Villager live = live(r);
+			if (live != null) {
+				refresh(r, live);
+			}
+			list.add(new BoardView.VillagerView(
+					UUID.fromString(r.uuid), r.displayName(), r.profession, r.level, r.baby, r.locked, live != null,
+					live != null ? live.getHealth() : 0, live != null ? live.getMaxHealth() : 0,
+					live != null ? live.getVillagerXp() : 0,
+					live != null && r.employed() ? live.getOffers().size() : 0,
+					BlockPos.containing(r.x, r.y, r.z),
+					live != null ? memory(live, MemoryModuleType.JOB_SITE) : null,
+					live != null ? memory(live, MemoryModuleType.HOME) : null,
+					r.boundSite == null ? null : BlockPos.of(r.boundSite),
+					r.firstSeenDay, r.born, r.parents == null ? "" : r.parents, r.lastSeen));
+		}
+		return new BoardView(v.id, v.name, currentDay(), canManage(player, v), v.founderName, v.boardPos(),
+				config.defaultRadius, v.polygon(), List.copyOf(v.news), list);
+	}
+
+	private static BlockPos memory(Villager villager, MemoryModuleType<GlobalPos> type) {
+		return villager.getBrain().getMemory(type).map(GlobalPos::pos).orElse(null);
+	}
+
+	public void handleAction(ServerPlayer player, Payloads.BoardAction action) {
+		Village v = villages.get(action.villageId());
+		if (v == null) {
+			return;
+		}
+		if (!dim(player.level()).equals(v.dimension) || player.distanceToSqr(Vec3.atCenterOf(v.boardPos())) > BOARD_REACH_SQ) {
+			player.sendOverlayMessage(Component.translatable("villageboard.msg.too_far"));
+			return;
+		}
+		VillagerRecord r = v.villagers.get(action.target().toString());
+		Villager live = r == null ? null : live(r);
+		switch (action.action()) {
+			case REFRESH -> {
+			}
+			case LOCATE -> {
+				if (r != null) {
+					actions.locate(player, r, live);
+				}
+				return;
+			}
+			default -> {
+				if (!canManage(player, v)) {
+					player.sendOverlayMessage(Component.translatable("villageboard.msg.no_permission"));
+					return;
+				}
+				switch (action.action()) {
+					case RENAME -> {
+						if (requireLoaded(player, live)) {
+							actions.rename(live, action.arg());
+						}
+					}
+					case LOCK -> {
+						if (requireLoaded(player, live)) {
+							actions.toggleLock(player, live);
+						}
+					}
+					case RESET -> {
+						if (requireLoaded(player, live)) {
+							actions.resetJob(player, live);
+						}
+					}
+					case UNBIND -> {
+						if (requireLoaded(player, live)) {
+							assignments.unbind(live, true);
+						}
+					}
+					case FORGET -> {
+						if (r != null && live == null) {
+							forget(action.target());
+						}
+					}
+					case RENAME_VILLAGE -> renameVillage(v, action.arg());
+					default -> {
+					}
+				}
+			}
+		}
+		sendView(player, v);
+	}
+
+	private static boolean requireLoaded(ServerPlayer player, Villager villager) {
+		if (villager == null) {
+			player.sendOverlayMessage(Component.translatable("villageboard.msg.not_loaded"));
+			return false;
+		}
+		return true;
+	}
+
+	private void renameVillage(Village v, String input) {
+		String name = clean(input);
+		if (name.isEmpty() || name.equals(v.name)) {
+			return;
+		}
+		news(v, NewsType.VILLAGE_RENAMED, v.name, name);
+		v.name = name;
+		v.dirty = true;
+		broadcastBorders();
+	}
+
+	// ------------------------------------------------------------------ contrat de travail
+
+	public void useContractOnVillager(ServerPlayer player, ItemStack stack, Villager villager) {
+		assignments.selectVillager(player, stack, villager);
+	}
+
+	public InteractionResult useContractOnBlock(ServerPlayer player, ItemStack stack, BlockPos pos) {
+		return assignments.useOnBlock(player, stack, pos);
+	}
+
+	void unbind(Villager villager) {
+		assignments.unbind(villager, false);
+	}
+
+	// ------------------------------------------------------------------ frontières
+
+	List<BorderView> borders() {
+		return villages.values().stream()
+				.map(v -> new BorderView(v.id, v.name, v.dimension, v.boardPos(), config.defaultRadius, v.polygon()))
+				.toList();
+	}
+
+	void sendBorders(ServerPlayer player) {
+		if (ServerPlayNetworking.canSend(player, Payloads.Borders.TYPE)) {
+			ServerPlayNetworking.send(player, new Payloads.Borders(borders()));
+		}
+	}
+
+	void broadcastBorders() {
+		server.getPlayerList().getPlayers().forEach(this::sendBorders);
+	}
+
+	// ------------------------------------------------------------------ recensement
+
+	private void scan() {
+		Set<String> dims = villages.values().stream().map(v -> v.dimension).collect(Collectors.toSet());
+		for (String dimension : dims) {
+			ServerLevel level = level(dimension);
+			if (level == null) {
+				continue;
+			}
+			for (Villager villager : level.getEntities(EntityTypes.VILLAGER, Entity::isAlive)) {
+				observe(villager, true);
+			}
+			validateBornes(level, dimension);
+		}
+	}
+
+	/** Retire les bornes disparues sans qu'un joueur les casse (explosion de TNT, /setblock…). */
+	private void validateBornes(ServerLevel level, String dimension) {
+		boolean changed = false;
+		for (Village v : villages.values()) {
+			if (!v.dimension.equals(dimension)) {
+				continue;
+			}
+			boolean removed = v.bornes.removeIf(packed -> {
+				BlockPos pos = BlockPos.of(packed);
+				return level.isLoaded(pos) && !level.getBlockState(pos).is(ModBlocks.BOUNDARY_STONE);
+			});
+			if (removed) {
+				v.bornesChanged();
+				changed = true;
+			}
+		}
+		if (changed) {
+			broadcastBorders();
+		}
+	}
+
+	/**
+	 * Met à jour la fiche d'un villageois vu dans le monde : l'inscrit s'il est sur un territoire,
+	 * gère les déménagements, et les départs (hors du territoire depuis {@code leaveDelaySeconds}).
+	 *
+	 * @return la fiche, ou null s'il n'appartient à aucun village
+	 */
+	VillagerRecord observe(Villager villager, boolean announce) {
+		UUID uuid = villager.getUUID();
+		String dimension = dim(villager.level());
+		Village current = index.get(uuid);
+		if (current == null) {
+			Village inside = villageAt(dimension, villager.getX(), villager.getZ());
+			if (inside == null) {
+				return null;
+			}
+			VillagerRecord r = register(inside, villager);
+			if (announce) {
+				news(inside, NewsType.ARRIVAL, r.displayName());
+			}
+			return r;
+		}
+		VillagerRecord r = current.villagers.get(uuid.toString());
+		if (current.contains(dimension, villager.getX(), villager.getZ(), config.defaultRadius)) {
+			r.outsideSince = 0;
+		} else {
+			Village inside = villageAt(dimension, villager.getX(), villager.getZ());
+			if (inside != null) {
+				current.villagers.remove(uuid.toString());
+				current.dirty = true;
+				inside.villagers.put(uuid.toString(), r);
+				index.put(uuid, inside);
+				r.outsideSince = 0;
+				news(current, NewsType.MOVED_OUT, r.displayName(), inside.name);
+				news(inside, NewsType.MOVED_IN, r.displayName(), current.name);
+			} else if (r.outsideSince == 0) {
+				r.outsideSince = System.currentTimeMillis();
+			} else if (announce && r.boundSite == null
+					&& System.currentTimeMillis() - r.outsideSince >= config.leaveDelaySeconds * 1000L) {
+				refresh(r, villager);
+				news(current, NewsType.LEFT, r.displayName(), r.baby ? "child" : r.profession);
+				forget(uuid);
+				return null;
+			}
+		}
+		refresh(r, villager);
+		return r;
+	}
+
+	private VillagerRecord register(Village village, Villager villager) {
+		VillagerRecord r = new VillagerRecord();
+		r.uuid = villager.getUUID().toString();
+		r.firstSeen = System.currentTimeMillis();
+		r.firstSeenDay = currentDay();
+		village.villagers.put(r.uuid, r);
+		index.put(villager.getUUID(), village);
+		refresh(r, villager);
+		return r;
+	}
+
+	@SuppressWarnings("deprecation")
+	void refresh(VillagerRecord r, Villager villager) {
+		if (villager.hasAttached(Attachments.LEGACY_NAME)) {
+			villager.removeAttached(Attachments.LEGACY_NAME);
+		}
+		Component custom = villager.getCustomName();
+		r.customName = custom == null ? null : custom.getString();
+		r.profession = Professions.key(villager);
+		r.level = villager.getVillagerData().level();
+		r.baby = villager.isBaby();
+		r.locked = isLocked(villager);
+		GlobalPos site = villager.getAttached(Attachments.BOUND_SITE);
+		r.boundSite = site == null ? null : site.pos().asLong();
+		r.dimension = dim(villager.level());
+		r.x = villager.getX();
+		r.y = villager.getY();
+		r.z = villager.getZ();
+		r.lastSeen = System.currentTimeMillis();
+		Village v = index.get(villager.getUUID());
+		if (v != null) {
+			v.dirty = true;
+		}
+	}
+
+	void forget(UUID uuid) {
+		Village v = index.remove(uuid);
+		if (v != null) {
+			v.villagers.remove(uuid.toString());
+			v.dirty = true;
+		}
+	}
+
+	void news(Village village, NewsType type, String... args) {
+		if (village == null) {
+			return;
+		}
+		village.news.addFirst(new NewsEntry(System.currentTimeMillis(), currentDay(), type, List.of(args)));
+		while (village.news.size() > config.maxNews) {
+			village.news.removeLast();
+		}
+		village.dirty = true;
+	}
+
+	long currentDay() {
+		return server.overworld().getOverworldClockTime() / 24000 + 1;
+	}
+
+	// ------------------------------------------------------------------ événements de jeu
+
+	/** Naissance : on note les parents qui portent un nom (les autres restent anonymes). */
+	public void onBreed(Villager child, Villager parent, Villager partner) {
+		if (pendingParents.size() > 64) {
+			pendingParents.clear();
+		}
+		String parents = Stream.of(displayName(parent), displayName(partner))
+				.filter(n -> !n.isEmpty())
+				.collect(Collectors.joining(" & "));
+		pendingParents.put(child.getUUID(), parents);
+	}
+
+	void onEntityLoad(Villager villager) {
+		String parents = pendingParents.remove(villager.getUUID());
+		if (parents == null) {
+			observe(villager, true);
+			return;
+		}
+		Village village = villageAt(dim(villager.level()), villager.getX(), villager.getZ());
+		if (village == null || index.containsKey(villager.getUUID())) {
+			return;
+		}
+		VillagerRecord r = register(village, villager);
+		r.born = true;
+		r.parents = parents;
+		news(village, NewsType.BIRTH, r.displayName(), parents);
+	}
+
+	void onEntityUnload(Villager villager) {
+		VillagerRecord r = record(villager.getUUID());
+		if (r != null && villager.isAlive()) {
+			refresh(r, villager);
+		}
+	}
+
+	void onDeath(Villager villager, DamageSource source) {
+		VillagerRecord r = observe(villager, false);
+		if (r == null) {
+			return;
+		}
+		Village village = index.get(villager.getUUID());
+		news(village, NewsType.DEATH, r.displayName(), r.baby ? "child" : r.profession, cause(source));
+		forget(villager.getUUID());
+	}
+
+	void onConvertedFrom(Villager villager, EntityType<?> into) {
+		Village village = index.containsKey(villager.getUUID())
+				? index.get(villager.getUUID())
+				: villageAt(dim(villager.level()), villager.getX(), villager.getZ());
+		if (village == null) {
+			return;
+		}
+		news(village, into == EntityTypes.WITCH ? NewsType.WITCH : NewsType.ZOMBIFIED, displayName(villager));
+		forget(villager.getUUID());
+	}
+
+	void onCured(Villager villager) {
+		Village village = villageAt(dim(villager.level()), villager.getX(), villager.getZ());
+		if (village == null) {
+			return;
+		}
+		VillagerRecord r = index.containsKey(villager.getUUID()) ? record(villager.getUUID()) : register(village, villager);
+		news(village, NewsType.CURED, r.displayName());
+	}
+
+	/** Appelé (par le mixin) juste avant un changement de métier. */
+	public void onCareerChange(Villager villager, String oldProfession, String newProfession) {
+		VillagerRecord r = observe(villager, true);
+		if (r == null) {
+			return;
+		}
+		r.profession = newProfession;
+		if (bypassFreeze) {
+			return; // affectation par contrat : la gazette annonce le contrat lui-même
+		}
+		Village village = index.get(villager.getUUID());
+		if (newProfession.equals(Professions.NONE)) {
+			news(village, NewsType.JOB_LOST, r.displayName(), oldProfession);
+		} else {
+			news(village, NewsType.JOB, r.displayName(), newProfession);
+		}
+	}
+
+	/** Encodage « player:Nom », « entity:clé.de.traduction » ou « damage:type » ; le client le traduit. */
+	private static String cause(DamageSource source) {
+		Entity killer = source.getEntity();
+		if (killer instanceof Player player) {
+			return "player:" + player.getPlainTextName();
+		}
+		if (killer != null) {
+			return "entity:" + killer.getType().getDescriptionId();
+		}
+		return "damage:" + source.typeHolder().unwrapKey().map(k -> k.identifier().getPath()).orElse(source.getMsgId());
+	}
+
+	// ------------------------------------------------------------------ nom, verrou, liaison
+
+	/** Le nom donné par un joueur, ou chaîne vide pour un villageois sans nom. */
+	String displayName(Villager villager) {
+		Component custom = villager.getCustomName();
+		return custom == null ? "" : custom.getString();
+	}
+
+	/** « Côme », ou « un villageois sans nom » (milieu de phrase). */
+	static Component who(String name) {
+		return name.isEmpty() ? Component.translatable("villageboard.someone") : Component.literal(name);
+	}
+
+	/** « Côme », ou « Un villageois sans nom » (début de phrase). */
+	static Component whoCap(String name) {
+		return name.isEmpty() ? Component.translatable("villageboard.someone.cap") : Component.literal(name);
+	}
+
+	public static boolean isLocked(Villager villager) {
+		return Boolean.TRUE.equals(villager.getAttached(Attachments.LOCKED));
+	}
+
+	/** Métier figé : verrouillé, ou lié à un poste par un contrat. */
+	public boolean isFrozen(Villager villager) {
+		return !bypassFreeze && (isLocked(villager) || WorkAssignments.isBound(villager));
+	}
+
+	void setLocked(Villager villager, boolean locked) {
+		if (locked) {
+			villager.setAttached(Attachments.LOCKED, true);
+		} else {
+			villager.removeAttached(Attachments.LOCKED);
+		}
+		VillagerRecord r = record(villager.getUUID());
+		if (r != null) {
+			refresh(r, villager);
+		}
+	}
+
+	static String clean(String input) {
+		String s = input.replaceAll("[\\p{Cntrl}§]", "").trim();
+		return s.length() > 32 ? s.substring(0, 32) : s;
+	}
+
+	private static void message(ServerPlayer player, Component message) {
+		if (player != null) {
+			player.sendSystemMessage(message);
+		}
+	}
+}
