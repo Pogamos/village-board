@@ -14,6 +14,9 @@ public final class Attachments {
 	/** Poste de travail attitré par un contrat. */
 	public static final AttachmentType<GlobalPos> BOUND_SITE =
 			AttachmentRegistry.create(VillageBoard.id("bound_site"), builder -> builder.persistent(GlobalPos.CODEC));
+	/** Lit attitré par un bail de logement. */
+	public static final AttachmentType<GlobalPos> BOUND_HOME =
+			AttachmentRegistry.create(VillageBoard.id("bound_home"), builder -> builder.persistent(GlobalPos.CODEC));
 	/** Ancien prénom automatique (version 0.2) : toujours déclaré pour relire les mondes existants, puis effacé. */
 	@Deprecated
 	static final AttachmentType<String> LEGACY_NAME =

@@ -18,6 +18,39 @@ public class GenTextures {
         File items = new File(dir.getParentFile(), "item");
         items.mkdirs();
         ImageIO.write(contract(), "png", new File(items, "work_contract.png"));
+        ImageIO.write(lease(), "png", new File(items, "housing_lease.png"));
+    }
+
+    /** Bail de logement : même parchemin, avec une petite maison dessinée et un sceau bleu. */
+    static BufferedImage lease() {
+        BufferedImage img = contract();
+        for (int y = 3; y < 15; y++) {
+            for (int x = 3; x < 13; x++) {
+                set(img, x, y, (x + y) % 5 == 0 ? 0xE6D6AA : 0xF1E4BF);
+            }
+        }
+        int ink = 0x5A4632;
+        for (int i = 0; i < 4; i++) {
+            set(img, 7 - i, 4 + i, ink);
+            set(img, 8 + i, 4 + i, ink);
+        }
+        for (int y = 8; y < 12; y++) {
+            set(img, 4, y, ink);
+            set(img, 11, y, ink);
+        }
+        for (int x = 4; x < 12; x++) {
+            set(img, x, 11, ink);
+        }
+        set(img, 7, 10, 0x8A5A30);
+        set(img, 8, 10, 0x8A5A30);
+        set(img, 7, 9, 0x8A5A30);
+        set(img, 8, 9, 0x8A5A30);
+        int[][] seal = {{10, 12}, {11, 12}, {10, 13}, {11, 13}, {12, 13}, {11, 14}};
+        for (int[] p : seal) {
+            set(img, p[0], p[1], 0x2D5BA8);
+        }
+        set(img, 10, 12, 0x5C8AD8);
+        return img;
     }
 
     /** Contrat de travail : parchemin roulé en haut, lignes d'écriture, sceau de cire rouge et ruban. */

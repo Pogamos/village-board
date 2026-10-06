@@ -16,6 +16,8 @@ Le mod s'installe **sur le serveur et sur chaque client**.
 ```
 Tableau de la mairie        Borne du village (×4)            Contrat de travail (sans forme)
   [papier][cloche][papier]        [teinture jaune]                 papier + plume + poche d'encre
+                                                                 Bail de logement (sans forme)
+                                                                 papier + plume + poche d'encre + laine
   [planches ×3]                   [pierre taillée sculptée]
   [bâton]   [ ]   [bâton]         [muret de pierre taillée]
 ```
@@ -34,6 +36,22 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   villages voisins en bleu, bornes, mairie, habitants colorés par statut, liens vers les postes attitrés, position du joueur.
   Molette = zoom, glisser = déplacer, survol = nom, clic sur un habitant = sa fiche, boutons + / − / recentrer,
   « ? » = légende.
+
+### Besoins du village
+L'onglet **Besoins** liste ce qui manque au village, du plus grave au moins grave (le nombre de besoins importants
+s'affiche sur l'onglet, avec une épingle rouge en cas d'urgence) :
+
+| Besoin | Gravité |
+|---|---|
+| Des sans-abri et aucun lit libre | urgent |
+| Aucun lit libre : naissances bloquées | conseil |
+| Des sans-emploi et aucun poste libre (avec suggestions de postes à construire) | conseil |
+| Aucun fermier (nourriture pour la reproduction) | conseil |
+| Aucun golem de fer (à partir de 5 habitants) | conseil |
+| Sans-abri ou sans-emploi alors que des lits ou postes sont libres, postes sans preneur, pas de cloche, métiers absents | info |
+
+Un clic sur un besoin mène là où agir : la liste des sans-abri, celle des sans-emploi, ou la carte.
+Les postes de travail apparaissent aussi sur la carte : libres en cyan, occupés en violet.
 
 ### Logement
 - Les lits du territoire apparaissent sur la carte : verts s'ils sont libres, rouges s'ils sont occupés. Au survol d'un lit,
@@ -55,6 +73,13 @@ Un villageois vu hors des bornes pendant 60 s (`leaveDelaySeconds`) est rayé du
 
 Clic droit avec un contrat vierge sur un poste : indique qui l'occupe. Accroupi + clic droit dans le vide : efface le contrat.
 
+### Bail de logement (lier un villageois à un lit)
+Même principe avec un lit : clic droit sur un villageois, puis sur un lit (tête ou pied, à moins de 48 blocs).
+L'occupant éventuel est délogé et cherchera un autre lit. Le villageois garde ce lit pour de bon : s'il le perd
+(un joueur dort dedans, chemin bloqué…), il y est réinstallé dans les 2 secondes. Si le lit est cassé, le lien est
+rompu et la gazette l'annonce. Utilisable aussi pour les enfants et les niais. Sur la carte, les lits attitrés sont
+cerclés de doré ; dans la fiche, le lit attitré a des liens [carte] et [libérer].
+
 ### Droits
 - Tout le monde peut consulter le tableau. Les actions se font à moins de 8 blocs du tableau.
 - Seuls le fondateur et les opérateurs peuvent retirer le tableau, ce qui dissout le village.
@@ -63,6 +88,7 @@ Clic droit avec un contrat vierge sur un poste : indique qui l'occupe. Accroupi 
 
 ### Commandes (opérateurs)
 - `/villageboard list` : liste les villages.
+- `/villageboard info <id>` : population, sans-abri, sans-emploi, lits, postes par métier, cloches, golems.
 - `/villageboard remove <id>` : dissout un village.
 
 ## Installation sur ton serveur
@@ -88,14 +114,15 @@ Les textures sont générées par `tools/GenTextures.java` :
 ```
 src/main/java/fr/villageboard/        commun (serveur + client)
 ├── block/      tableau de la mairie, borne
-├── village/    VillageManager (registre, bornes, gazette), VillagerActions, WorkAssignments (postes attitrés), Housing (lits),
+├── village/    VillageManager (registre, bornes, gazette), VillagerActions, Assignments (poste et lit attitrés), Facilities (lits, postes, cloches),
 │               Territory (polygone), événements, commande
-├── item/       contrat de travail
+├── item/       contrat de travail, bail de logement
 ├── net/        paquets réseau (vue du tableau, frontières, actions)
 └── mixin/      VillagerMixin : changements de métier (verrou + gazette), naissances
 src/client/java/fr/villageboard/client/
 ├── BoardScreen.java      l'écran du tableau
 ├── TerritoryMap.java     la carte interactive du territoire
+├── VillageNeeds.java     calcul des besoins du village
 └── BorderDisplay.java    particules des frontières, message d'entrée/sortie
 ```
 

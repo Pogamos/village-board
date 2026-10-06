@@ -1,7 +1,7 @@
 package fr.villageboard.village;
 
 import fr.villageboard.block.ModBlocks;
-import fr.villageboard.item.ModItems;
+import fr.villageboard.item.ContractItem;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -52,22 +52,22 @@ public final class ServerEvents {
 			}
 		});
 
-		// Contrat de travail : intercepté avant le commerce avec le villageois / l'interface du bloc.
+		// Contrat de travail et bail : interceptés avant le commerce avec le villageois / l'interface du bloc.
 		UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
-			if (!(entity instanceof Villager villager) || !player.getItemInHand(hand).is(ModItems.WORK_CONTRACT)) {
+			if (!(entity instanceof Villager villager) || !(player.getItemInHand(hand).getItem() instanceof ContractItem contract)) {
 				return InteractionResult.PASS;
 			}
 			if (player instanceof ServerPlayer serverPlayer && VillageManager.get() != null) {
-				VillageManager.get().useContractOnVillager(serverPlayer, player.getItemInHand(hand), villager);
+				VillageManager.get().useContractOnVillager(serverPlayer, player.getItemInHand(hand), villager, contract.kind());
 			}
 			return InteractionResult.SUCCESS;
 		});
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
-			if (!(player instanceof ServerPlayer serverPlayer) || !player.getItemInHand(hand).is(ModItems.WORK_CONTRACT)
+			if (!(player instanceof ServerPlayer serverPlayer) || !(player.getItemInHand(hand).getItem() instanceof ContractItem contract)
 					|| VillageManager.get() == null) {
 				return InteractionResult.PASS;
 			}
-			return VillageManager.get().useContractOnBlock(serverPlayer, player.getItemInHand(hand), hit.getBlockPos());
+			return VillageManager.get().useContractOnBlock(serverPlayer, player.getItemInHand(hand), hit.getBlockPos(), contract.kind());
 		});
 
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {

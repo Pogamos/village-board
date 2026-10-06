@@ -23,6 +23,7 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
@@ -63,7 +64,7 @@ public class BoardScreen extends Screen {
 	private static final int ROW_SELECTED = 0x44603A1A;
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
-	private enum Tab {NEWS, PEOPLE, TERRITORY}
+	private enum Tab {NEWS, PEOPLE, NEEDS, TERRITORY}
 
 	private record Row(FormattedCharSequence text, int color, int height) {
 	}
@@ -88,6 +89,7 @@ public class BoardScreen extends Screen {
 	private EditBox nameBox;
 	private String villageNameDraft;
 	private List<Row> newsRows = List.of();
+	private List<VillageNeeds.Need> needs = List.of();
 	private final List<Hit> hits = new ArrayList<>();
 	private TerritoryMap map;
 	private int left;
@@ -113,6 +115,7 @@ public class BoardScreen extends Screen {
 		if (map != null) {
 			map.setView(newView);
 		}
+		needs = VillageNeeds.compute(newView);
 		renaming = false;
 		confirmReset = false;
 		rebuildWidgets();
@@ -161,6 +164,7 @@ public class BoardScreen extends Screen {
 		left = (width - boardW) / 2;
 		top = (height - boardH) / 2 + 4;
 		newsRows = buildNewsRows(contentRight() - contentLeft() - 8);
+		needs = VillageNeeds.compute(view);
 		nameBox = null;
 		if (tab == Tab.PEOPLE && selectedVillager() != null) {
 			initSheet(selectedVillager());
@@ -300,6 +304,7 @@ public class BoardScreen extends Screen {
 					drawSheet(g, v, mouseX, mouseY);
 				}
 			}
+			case NEEDS -> drawNeeds(g, mouseX, mouseY);
 			case TERRITORY -> drawTerritory(g, mouseX, mouseY);
 		}
 		super.extractRenderState(g, mouseX, mouseY, partialTick);
@@ -340,7 +345,13 @@ public class BoardScreen extends Screen {
 		MutableComponent title = Component.literal(view.name()).withStyle(ChatFormatting.BOLD);
 		g.text(font, title, cx - font.width(title) / 2, top + 9, INK, false);
 		if (mouseX >= cx - plaqueHalf && mouseX < cx + plaqueHalf && mouseY >= top + 4 && mouseY < top + 22) {
-			g.setTooltipForNextFrame(font, Component.translatable("villageboard.gui.founder", view.founderName()), mouseX, mouseY);
+			g.setComponentTooltipForNextFrame(font, List.of(
+					Component.translatable("villageboard.gui.founder", view.founderName()),
+					Component.translatable("villageboard.gui.population", view.villagers().size())), mouseX, mouseY);
+		}
+		Component day = Component.translatable("villageboard.gui.day", view.day());
+		if (font.width(day) < cx - plaqueHalf - left - 12) {
+			g.text(font, day, left + 8, top + 9, LIGHT_TEXT, true);
 		}
 
 		Tab[] tabs = Tab.values();
@@ -352,14 +363,20 @@ public class BoardScreen extends Screen {
 			int y1 = active ? top + 28 : top + 30;
 			Hit hit = new Hit(x1, y1, x2, top + 46, () -> selectTab(t));
 			paper(g, x1, y1, x2, top + 46, active ? PAPER : hit.contains(mouseX, mouseY) ? 0xFFE8D8AE : PAPER_DIM);
+			long alerts = t == Tab.NEEDS ? VillageNeeds.important(needs) : 0;
+			boolean urgent = t == Tab.NEEDS && needs.stream().anyMatch(n -> n.severity() == VillageNeeds.Severity.URGENT);
 			pin(g, x1 + 33, y1 + 1);
-			Component label = gui("tab." + t.name().toLowerCase());
+			if (urgent) {
+				g.fill(x1 + 32, y1, x1 + 37, y1 + 5, 0xFFFF3B30);
+			}
+			MutableComponent label = gui("tab." + t.name().toLowerCase());
+			if (alerts > 0) {
+				label = label.append(" (" + alerts + ")");
+			}
 			g.text(font, label, x1 + 34 - font.width(label) / 2, y1 + 6, active ? INK : FADED, false);
 			hits.add(hit);
 		}
 
-		Component info = Component.translatable("villageboard.gui.header_info", view.day(), view.villagers().size());
-		g.text(font, info, left + boardW - 10 - font.width(info), top + 34, LIGHT_TEXT, true);
 	}
 
 	private void drawNews(GuiGraphicsExtractor g) {
@@ -383,6 +400,95 @@ public class BoardScreen extends Screen {
 		}
 		g.disableScissor();
 		scrollbar(g, x2 + 2, y1, y2, total);
+	}
+
+	/** Une note épinglée par besoin, du plus grave au moins grave ; un clic emmène là où agir. */
+	private void drawNeeds(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+		int x1 = contentLeft();
+		int y1 = contentTop() - 2;
+		int x2 = contentRight() - 6;
+		int y2 = top + boardH - 12;
+		if (needs.isEmpty()) {
+			g.text(font, gui("needs.none"), x1 + 2, y1 + 2, GREEN, false);
+			return;
+		}
+		int textX = x1 + 26;
+		int textWidth = x2 - textX - 4;
+		List<Integer> heights = new ArrayList<>();
+		int total = 0;
+		for (VillageNeeds.Need need : needs) {
+			int lines = font.split(need.detail(), textWidth).size();
+			int h = 6 + 11 + lines * 10 + (need.icons().size() > 1 ? 19 : 0) + 4;
+			heights.add(h);
+			total += h + 5;
+		}
+		scroll = Mth.clamp(scroll, 0, Math.max(0, total - (y2 - y1)));
+		g.enableScissor(x1 - 2, y1, x2 + 2, y2);
+		int y = y1 - scroll;
+		ItemStack hoveredIcon = null;
+		for (int i = 0; i < needs.size(); i++) {
+			VillageNeeds.Need need = needs.get(i);
+			int h = heights.get(i);
+			if (y + h > y1 && y < y2) {
+				Hit hit = new Hit(x1, Math.max(y, y1), x2, Math.min(y + h, y2), () -> goTo(need.target()));
+				boolean over = hit.contains(mouseX, mouseY) && need.target() != VillageNeeds.Target.NONE;
+				g.fill(x1, y, x2, y + h, PAPER_EDGE);
+				g.fill(x1 + 1, y + 1, x2 - 1, y + h - 1, over ? 0xFFFBF1D6 : 0xFFF7ECCD);
+				g.fill(x1 + 1, y + 1, x1 + 4, y + h - 1, need.severity().color);
+				if (!need.icons().isEmpty()) {
+					g.item(need.icons().getFirst(), x1 + 7, y + 5);
+				}
+				g.text(font, need.title().copy().withStyle(ChatFormatting.BOLD), textX, y + 6, INK, false);
+				int ty = line(g, need.detail(), textX, y + 18, textWidth, FADED);
+				if (need.icons().size() > 1) {
+					int ix = textX;
+					for (ItemStack icon : need.icons()) {
+						g.item(icon, ix, ty + 1);
+						if (mouseX >= ix && mouseX < ix + 16 && mouseY >= ty + 1 && mouseY < ty + 17) {
+							hoveredIcon = icon;
+						}
+						ix += 18;
+					}
+				}
+				if (need.target() != VillageNeeds.Target.NONE) {
+					hits.add(hit);
+					if (over) {
+						Component go = gui("needs.go." + need.target().name().toLowerCase());
+						g.text(font, go, x2 - 4 - font.width(go), y + 6, LINK, false);
+					}
+				}
+			}
+			y += h + 5;
+		}
+		g.disableScissor();
+		scrollbar(g, x2 + 2, y1, y2, total);
+		if (hoveredIcon != null) {
+			g.setTooltipForNextFrame(font, hoveredIcon.getHoverName(), mouseX, mouseY);
+		}
+	}
+
+	/** Emmène là où agir pour un besoin : liste des sans-abri, des sans-emploi, ou carte. */
+	private void goTo(VillageNeeds.Target target) {
+		switch (target) {
+			case HOMELESS -> {
+				tab = Tab.PEOPLE;
+				category = "homeless";
+				selected = null;
+			}
+			case UNEMPLOYED -> {
+				tab = Tab.PEOPLE;
+				category = "minecraft:none";
+				selected = null;
+			}
+			case MAP -> tab = Tab.TERRITORY;
+			default -> {
+				return;
+			}
+		}
+		scroll = 0;
+		renaming = false;
+		confirmReset = false;
+		rebuildWidgets();
 	}
 
 	private List<Row> buildNewsRows(int width) {
@@ -452,7 +558,8 @@ public class BoardScreen extends Screen {
 			g.text(font, describe(v), lx1 + 20, ry + 12, FADED, false);
 			Component right = v.loaded() ? distance(v.pos()) : gui("absent");
 			g.text(font, right, lx2 - 4 - font.width(right), ry + 2, FADED, false);
-			Component badge = v.bound() != null ? gui("bound_short") : v.locked() ? gui("locked_short") : null;
+			Component badge = v.bound() != null || v.boundHome() != null ? gui("bound_short")
+					: v.locked() ? gui("locked_short") : null;
 			if (badge != null) {
 				g.text(font, badge, lx2 - 4 - font.width(badge), ry + 12, GOLD, false);
 			}
@@ -491,14 +598,12 @@ public class BoardScreen extends Screen {
 			ty = line(g, gui("locked"), tx, ty, width, GOLD);
 		}
 		if (v.bound() != null) {
-			Component bound = Component.translatable("villageboard.gui.bound", coords(v.bound()));
+			BlockPos station = v.bound();
+			Component bound = Component.translatable("villageboard.gui.bound", coords(station));
 			g.text(font, bound, tx, ty, GOLD, false);
+			int lx = link(g, gui("show_on_map"), tx + font.width(bound) + 4, ty, mouseX, mouseY, () -> showOnMap(station));
 			if (view.canManage() && v.loaded()) {
-				Component link = gui("unbind");
-				int lx = tx + font.width(bound) + 4;
-				Hit hit = new Hit(lx, ty - 1, lx + font.width(link), ty + 9, () -> send(Action.UNBIND, v.uuid(), ""));
-				g.text(font, link, lx, ty, hit.contains(mouseX, mouseY) ? RED_LINK : LINK, false);
-				hits.add(hit);
+				link(g, gui("unbind"), lx + 4, ty, mouseX, mouseY, () -> send(Action.UNBIND, v.uuid(), ""));
 			}
 			ty += 10;
 		} else if (v.employed()) {
@@ -518,15 +623,20 @@ public class BoardScreen extends Screen {
 					? Component.translatable("villageboard.gui.job_site", coords(v.jobSite()))
 					: gui("job_site.none"), tx, ty, width, INK);
 		}
-		if (v.home() != null) {
-			Component home = Component.translatable("villageboard.gui.home", coords(v.home()));
-			g.text(font, home, tx, ty, INK, false);
+		if (v.boundHome() != null) {
+			BlockPos bed = v.boundHome();
+			Component home = Component.translatable("villageboard.gui.bound_home", coords(bed));
+			g.text(font, home, tx, ty, GOLD, false);
+			int lx = link(g, gui("show_on_map"), tx + font.width(home) + 4, ty, mouseX, mouseY, () -> showOnMap(bed));
+			if (view.canManage() && v.loaded()) {
+				link(g, gui("unbind"), lx + 4, ty, mouseX, mouseY, () -> send(Action.UNBIND_HOME, v.uuid(), ""));
+			}
+			ty += 10;
+		} else if (v.home() != null) {
 			BlockPos bed = v.home();
-			Component link = gui("show_on_map");
-			int lx = tx + font.width(home) + 4;
-			Hit hit = new Hit(lx, ty - 1, lx + font.width(link), ty + 9, () -> showOnMap(bed));
-			g.text(font, link, lx, ty, hit.contains(mouseX, mouseY) ? RED_LINK : LINK, false);
-			hits.add(hit);
+			Component home = Component.translatable("villageboard.gui.home", coords(bed));
+			g.text(font, home, tx, ty, INK, false);
+			link(g, gui("show_on_map"), tx + font.width(home) + 4, ty, mouseX, mouseY, () -> showOnMap(bed));
 			ty += 10;
 		} else {
 			ty = line(g, freeBeds() > 0 ? gui("homeless.free_beds") : gui("homeless.no_bed"), tx, ty, width, GOLD);
@@ -614,6 +724,14 @@ public class BoardScreen extends Screen {
 		int thumb = Math.max(12, visible * visible / total);
 		int pos = y1 + (int) ((long) (visible - thumb) * scroll / (total - visible));
 		g.fill(x, pos, x + 2, pos + thumb, FADED);
+	}
+
+	/** Lien cliquable « [texte] » ; renvoie l'abscisse de sa fin. */
+	private int link(GuiGraphicsExtractor g, Component text, int x, int y, int mouseX, int mouseY, Runnable action) {
+		Hit hit = new Hit(x, y - 1, x + font.width(text), y + 9, action);
+		g.text(font, text, x, y, hit.contains(mouseX, mouseY) ? RED_LINK : LINK, false);
+		hits.add(hit);
+		return hit.x2();
 	}
 
 	/** Texte avec retour à la ligne ; renvoie la position y suivante. */

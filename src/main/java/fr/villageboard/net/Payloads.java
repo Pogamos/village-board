@@ -39,7 +39,7 @@ public final class Payloads {
 	}
 
 	public enum Action {
-		REFRESH, RENAME, LOCATE, LOCK, RESET, UNBIND, FORGET, RENAME_VILLAGE
+		REFRESH, RENAME, LOCATE, LOCK, RESET, UNBIND, UNBIND_HOME, FORGET, RENAME_VILLAGE
 	}
 
 	/** Client → serveur : une action depuis le tableau. {@code target} = villageois concerné (ou UUID nul). */

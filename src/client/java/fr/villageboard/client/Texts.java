@@ -105,6 +105,8 @@ final class Texts {
 			case WITCH -> Component.translatable(key, who(a.get(0)));
 			case DEATH -> Component.translatable(key, who(a.get(0)), professionLower(a.get(1)), cause(a.get(2)));
 			case ASSIGNED -> Component.translatable(key, who(a.get(0)), professionLower(a.get(1)), a.get(2));
+			case HOME_ASSIGNED -> Component.translatable(key, who(a.get(0)), a.get(1));
+			case HOME_UNBOUND -> Component.translatable(key, whoCap(a.get(0)));
 			case RENAMED -> a.get(1).isEmpty()
 					? Component.translatable(key + "_removed", whoCap(a.get(0)))
 					: Component.translatable(key, whoCap(a.get(0)), a.get(1));

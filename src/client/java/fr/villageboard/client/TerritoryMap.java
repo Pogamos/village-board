@@ -7,6 +7,7 @@ import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BoardView.VillagerView;
 import fr.villageboard.net.BorderView;
 import fr.villageboard.village.Territory;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -25,14 +26,17 @@ import net.minecraft.world.level.material.MapColor;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
  * Carte du territoire vue du dessus, peinte comme une carte vanilla à partir des chunks chargés
  * côté client : territoire teinté et cerné, villages voisins en bleu, le reste estompé.
- * Lits libres (vert) et occupés (rouge) ; survoler un habitant ou un lit relie l'un à l'autre.
+ * Lits libres (vert) et occupés (rouge), postes de travail libres (cyan) et occupés (violet) ;
+ * survoler un habitant le relie à son lit et à son poste, survoler un lit ou un poste montre son occupant.
  * Molette = zoom (autour du curseur), glisser = déplacer, clic sur un habitant = sa fiche.
  */
 final class TerritoryMap {
@@ -56,6 +60,9 @@ final class TerritoryMap {
 	static final int PLAYER = 0xFFFFFFFF;
 	static final int BED_FREE = 0xFF7CCB5A;
 	static final int BED_TAKEN = 0xFFB0413A;
+	static final int BOUND_BED = 0xFFE0A21B;
+	static final int STATION_FREE = 0xFF45B5C4;
+	static final int STATION_TAKEN = 0xFF6B4E9B;
 	private static final ItemStack BED_FREE_ICON = new ItemStack(Items.BED.pick(DyeColor.LIME));
 	private static final ItemStack BED_TAKEN_ICON = new ItemStack(Items.BED.pick(DyeColor.RED));
 	private static final int CONTROLS = 4;
@@ -92,6 +99,10 @@ final class TerritoryMap {
 	private boolean helpHover;
 	/** Lit (BlockPos compacté) → son occupant d'après le registre. */
 	private Map<Long, VillagerView> ownerByBed = Map.of();
+	/** Lits attitrés (bail de logement). */
+	private Set<Long> boundBeds = Set.of();
+	/** Poste de travail (BlockPos compacté) → villageois qui y travaille (poste mémorisé ou attitré). */
+	private Map<Long, VillagerView> workerByStation = Map.of();
 	private BlockPos focusPos;
 	private long focusUntil;
 
@@ -108,7 +119,25 @@ final class TerritoryMap {
 				owners.put(v.home().asLong(), v);
 			}
 		}
+		Set<Long> bound = new HashSet<>();
+		for (VillagerView v : view.villagers()) {
+			if (v.boundHome() != null) {
+				owners.put(v.boundHome().asLong(), v);
+				bound.add(v.boundHome().asLong());
+			}
+		}
 		ownerByBed = owners;
+		boundBeds = bound;
+		Map<Long, VillagerView> workers = new HashMap<>();
+		for (VillagerView v : view.villagers()) {
+			if (v.jobSite() != null) {
+				workers.put(v.jobSite().asLong(), v);
+			}
+			if (v.bound() != null) {
+				workers.put(v.bound().asLong(), v);
+			}
+		}
+		workerByStation = workers;
 		dirty = true;
 	}
 
@@ -338,8 +367,18 @@ final class TerritoryMap {
 				}
 			}
 		}
+		BoardView.WorkstationView hoveredStation = null;
+		if (under.isEmpty() && hoveredBed == null) {
+			for (BoardView.WorkstationView station : view.workstations()) {
+				if (near(mouseX, mouseY, station.pos(), bedRadius())) {
+					hoveredStation = station;
+					break;
+				}
+			}
+		}
 		VillagerView linked = !under.isEmpty() ? under.getFirst()
-				: hoveredBed != null ? ownerByBed.get(hoveredBed.pos().asLong()) : null;
+				: hoveredBed != null ? ownerByBed.get(hoveredBed.pos().asLong())
+				: hoveredStation != null ? workerByStation.get(hoveredStation.pos().asLong()) : null;
 
 		// 2) Bornes.
 		List<BlockPos> polygon = view.polygon();
@@ -358,6 +397,9 @@ final class TerritoryMap {
 		for (BoardView.BedView bed : view.beds()) {
 			int sx = (int) toScreenX(bed.pos().getX() + 0.5);
 			int sy = (int) toScreenY(bed.pos().getZ() + 0.5);
+			if (boundBeds.contains(bed.pos().asLong())) {
+				ring(g, sx, sy, bedIcons ? 5 : 3, BOUND_BED);
+			}
 			if (bedIcons) {
 				icon(g, bed.occupied() ? BED_TAKEN_ICON : BED_FREE_ICON, sx, sy, 0.5f);
 			} else {
@@ -367,13 +409,38 @@ final class TerritoryMap {
 		}
 		if (hoveredBed != null) {
 			VillagerView owner = ownerByBed.get(hoveredBed.pos().asLong());
+			boolean attitre = boundBeds.contains(hoveredBed.pos().asLong());
 			Component text = owner != null
-					? Component.translatable("villageboard.map.bed_of", Texts.listName(owner.name()))
+					? Component.translatable(attitre ? "villageboard.map.bound_bed_of" : "villageboard.map.bed_of", Texts.listName(owner.name()))
 					: Component.translatable(hoveredBed.occupied() ? "villageboard.map.bed_taken" : "villageboard.map.bed_free");
 			hover = new Hover(text, owner);
 		}
 
-		// 4) Liens : postes attitrés (doré), lit de l'habitant survolé (bleu).
+		// 3 bis) Postes de travail : icône du poste de près, carré de loin.
+		for (BoardView.WorkstationView station : view.workstations()) {
+			int sx = (int) toScreenX(station.pos().getX() + 0.5);
+			int sy = (int) toScreenY(station.pos().getZ() + 0.5);
+			if (bedIcons) {
+				if (!station.occupied()) {
+					g.fill(sx - 5, sy - 5, sx + 5, sy + 5, 0x6645B5C4);
+				}
+				icon(g, Texts.icon(station.profession()), sx, sy, 0.5f);
+			} else {
+				g.fill(sx - 2, sy - 2, sx + 2, sy + 2, 0xFF2A1A0E);
+				g.fill(sx - 1, sy - 1, sx + 1, sy + 1, station.occupied() ? STATION_TAKEN : STATION_FREE);
+			}
+		}
+		if (hoveredStation != null) {
+			VillagerView worker = workerByStation.get(hoveredStation.pos().asLong());
+			Component what = Texts.icon(hoveredStation.profession()).getHoverName().copy()
+					.append(" · ").append(Texts.profession(hoveredStation.profession()));
+			Component state = worker != null
+					? Component.translatable("villageboard.map.station_of", Texts.listName(worker.name()))
+					: Component.translatable(hoveredStation.occupied() ? "villageboard.map.station_taken" : "villageboard.map.station_free");
+			hover = new Hover(what.copy().append(" · ").append(state), worker);
+		}
+
+		// 4) Liens : postes attitrés (doré), lit de l'habitant survolé (bleu), poste de l'habitant survolé (violet).
 		for (VillagerView v : view.villagers()) {
 			if (v.bound() != null && v.loaded()) {
 				dottedLine(g, toScreenX(v.pos().getX() + 0.5), toScreenY(v.pos().getZ() + 0.5),
@@ -383,6 +450,10 @@ final class TerritoryMap {
 		if (linked != null && linked.home() != null) {
 			dottedLine(g, toScreenX(linked.pos().getX() + 0.5), toScreenY(linked.pos().getZ() + 0.5),
 					toScreenX(linked.home().getX() + 0.5), toScreenY(linked.home().getZ() + 0.5), 0xFF1F4E8C);
+		}
+		if (linked != null && linked.jobSite() != null && linked.bound() == null) {
+			dottedLine(g, toScreenX(linked.pos().getX() + 0.5), toScreenY(linked.pos().getZ() + 0.5),
+					toScreenX(linked.jobSite().getX() + 0.5), toScreenY(linked.jobSite().getZ() + 0.5), 0xFF6B4E9B);
 		}
 
 		// 5) Habitants.
@@ -503,14 +574,17 @@ final class TerritoryMap {
 				legendLine(NITWIT, "legend.nitwit"),
 				legendLine(BED_FREE, "legend.bed_free"),
 				legendLine(BED_TAKEN, "legend.bed_taken"),
+				legendLine(BOUND_BED, "legend.bound_bed"),
+				legendLine(STATION_FREE, "legend.station_free"),
+				legendLine(STATION_TAKEN, "legend.station_taken"),
 				legendLine(PLAYER, "legend.you"),
 				Component.empty(),
-				Component.translatable("villageboard.gui.map_hint").withStyle(net.minecraft.ChatFormatting.GRAY));
+				Component.translatable("villageboard.gui.map_hint").withStyle(ChatFormatting.GRAY));
 	}
 
 	private static Component legendLine(int color, String key) {
 		return Component.literal("■ ").withColor(color & 0xFFFFFF)
-				.append(Component.translatable("villageboard.gui." + key).withStyle(net.minecraft.ChatFormatting.WHITE));
+				.append(Component.translatable("villageboard.gui." + key).withStyle(ChatFormatting.WHITE));
 	}
 
 	/** Centre la carte sur un point et l'y signale quelques secondes (lien « voir sur la carte »). */

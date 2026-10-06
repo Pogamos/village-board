@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:paper",
+    "minecraft:feather",
+    "minecraft:ink_sac",
+    "#minecraft:wool"
+  ],
+  "result": { "id": "villageboard:housing_lease" }
+}

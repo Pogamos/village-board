@@ -169,7 +169,7 @@ final class VillagerActions {
 		}
 		ServerLevel level = (ServerLevel) villager.level();
 		manager.setLocked(villager, false);
-		manager.unbind(villager);
+		manager.unbindWork(villager);
 		villager.releasePoi(MemoryModuleType.JOB_SITE);
 		villager.getBrain().eraseMemory(MemoryModuleType.JOB_SITE);
 		villager.getBrain().eraseMemory(MemoryModuleType.POTENTIAL_JOB_SITE);

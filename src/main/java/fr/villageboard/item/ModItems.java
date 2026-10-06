@@ -21,19 +21,24 @@ public final class ModItems {
 					.build());
 
 	/** Contrat de travail : lie un villageois à un poste de travail précis. */
-	public static final Item WORK_CONTRACT = register("work_contract");
+	public static final Item WORK_CONTRACT = register("work_contract", ContractKind.WORK);
+	/** Bail de logement : lie un villageois à un lit précis. */
+	public static final Item HOUSING_LEASE = register("housing_lease", ContractKind.HOME);
 
 	private ModItems() {
 	}
 
-	private static Item register(String name) {
+	private static Item register(String name, ContractKind kind) {
 		ResourceKey<Item> key = ResourceKey.create(Registries.ITEM, VillageBoard.id(name));
-		return Registry.register(BuiltInRegistries.ITEM, key, new WorkContractItem(new Item.Properties().setId(key).stacksTo(1)));
+		return Registry.register(BuiltInRegistries.ITEM, key, new ContractItem(new Item.Properties().setId(key).stacksTo(1), kind));
 	}
 
 	public static void init() {
 		CreativeModeTabEvents.modifyOutputEvent(
 				ResourceKey.create(Registries.CREATIVE_MODE_TAB, Identifier.withDefaultNamespace("tools_and_utilities")))
-				.register(output -> output.accept(WORK_CONTRACT));
+				.register(output -> {
+					output.accept(WORK_CONTRACT);
+					output.accept(HOUSING_LEASE);
+				});
 	}
 }

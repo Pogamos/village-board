@@ -41,18 +41,22 @@ Pièges déjà rencontrés en 26.2 :
   - `village/VillageManager` : registre côté serveur. Une instance par serveur, thread serveur uniquement,
     sauvegarde JSON dans `<monde>/villageboard/villages.json`. Gère le recensement (`observe`), les déménagements et départs,
     la gazette, les bornes et les droits.
-  - `village/Housing` : lits du territoire (POI `HOME`), relus seulement dans les chunks chargés, avec un cache par chunk
-    dans `Village.bedCache` (non sauvegardé). L'état « lits libres / aucun » est annoncé après 2 recensements identiques.
+  - `village/Facilities` : équipements du territoire d'après les POI : lits (`HOME`), postes de travail (avec leur métier,
+    via `Professions.forPoi`) et cloches (`MEETING`). Relus seulement dans les chunks chargés, avec un cache par chunk
+    dans `Village.facilityCache` (non sauvegardé). Les golems sont comptés au recensement (`Village.golems`). L'état « lits libres / aucun » est annoncé après 2 recensements identiques.
     Minecraft n'efface la mémoire `HOME` d'un lit détruit qu'au coucher : `VillageManager.bedExists` vérifie que le lit existe encore.
-  - `village/WorkAssignments` : postes attitrés (contrat de travail). `VillagerActions` : renommer, localiser, verrou, réinitialisation.
+  - `village/Assignments` : liaisons permanentes à un poste (contrat de travail, attache `BOUND_SITE`, mémoire `JOB_SITE`)
+    ou à un lit (bail de logement, attache `BOUND_HOME`, mémoire `HOME`). `maintain()` réinstalle toutes les 2 s
+    les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu. `VillagerActions` : renommer, localiser, verrou, réinitialisation.
   - `village/Territory` : géométrie partagée client/serveur. Polygone des bornes trié par angle autour du barycentre ;
     cercle provisoire avec moins de 3 bornes.
   - `mixin/VillagerMixin` : intercepte `setVillagerData`, ce qui donne les actualités de métier et bloque les changements de métier
     des villageois verrouillés ou liés (`isFrozen`, contourné par `bypassFreeze`), ainsi que `getBreedOffspring` (naissances).
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
-  `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités).
-- Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
+  `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
+  `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
+- Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
 - La gazette stocke un **type + des arguments**, jamais du texte : le client compose la phrase dans sa langue (`Texts.news`).
   Un nom vide désigne un villageois sans nom (« un villageois sans nom »).
 - `archive/paper-plugin/` : ancienne version en plugin Paper, abandonnée. Ne pas la modifier.
@@ -64,6 +68,7 @@ Pas de tests automatisés. On vérifie sur le serveur de test via RCON :
 - poser les bornes avec `setblock` et invoquer des villageois ;
 - lire les actualités dans le JSON après `docker compose stop minecraft`.
 
+`/villageboard info <id>` résume ce que le serveur a relevé (lits, postes, cloches, golems, sans-abri, sans-emploi).
 Pour simuler un verrou ou une liaison : `data merge entity ... {"fabric:attachments":{"villageboard:locked":1b}}`.
 `data remove` ne fonctionne pas : mettre `0b` à la place.
 

@@ -27,6 +27,10 @@ public enum NewsType {
 	ASSIGNED("⚒", 0xFF00695C),
 	/** nom, métier */
 	UNBOUND("✖", 0xFFB26A00),
+	/** nom, coordonnées du lit */
+	HOME_ASSIGNED("⌂", 0xFF1F4E8C),
+	/** nom */
+	HOME_UNBOUND("✖", 0xFFB26A00),
 	/** nom */
 	ZOMBIFIED("✝", 0xFF4E6B2E),
 	/** nom */

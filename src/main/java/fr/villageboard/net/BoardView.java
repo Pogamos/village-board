@@ -20,10 +20,17 @@ public record BoardView(
 		List<BlockPos> polygon,
 		List<NewsEntry> news,
 		List<VillagerView> villagers,
-		List<BedView> beds) {
+		List<BedView> beds,
+		List<WorkstationView> workstations,
+		int bells,
+		int golems) {
 
 	/** Un lit du territoire (position de la tête du lit). Son occupant se déduit du champ {@code home} des villageois. */
 	public record BedView(BlockPos pos, boolean occupied) {
+	}
+
+	/** Un poste de travail du territoire et le métier qu'il donne (identifiant complet). */
+	public record WorkstationView(BlockPos pos, String profession, boolean occupied) {
 	}
 
 	/**
@@ -46,6 +53,7 @@ public record BoardView(
 			BlockPos jobSite,
 			BlockPos home,
 			BlockPos bound,
+			BlockPos boundHome,
 			long firstSeenDay,
 			boolean born,
 			String parents,
@@ -67,6 +75,7 @@ public record BoardView(
 			buf.writeNullable(jobSite, (b, p) -> b.writeBlockPos(p));
 			buf.writeNullable(home, (b, p) -> b.writeBlockPos(p));
 			buf.writeNullable(bound, (b, p) -> b.writeBlockPos(p));
+			buf.writeNullable(boundHome, (b, p) -> b.writeBlockPos(p));
 			buf.writeVarLong(firstSeenDay);
 			buf.writeBoolean(born);
 			buf.writeUtf(parents);
@@ -77,6 +86,7 @@ public record BoardView(
 			return new VillagerView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readBoolean(),
 					buf.readBoolean(), buf.readBoolean(), buf.readFloat(), buf.readFloat(), buf.readVarInt(), buf.readVarInt(),
 					buf.readBlockPos(), buf.readNullable(b -> b.readBlockPos()), buf.readNullable(b -> b.readBlockPos()), buf.readNullable(b -> b.readBlockPos()),
+					buf.readNullable(b -> b.readBlockPos()),
 					buf.readVarLong(), buf.readBoolean(), buf.readUtf(), buf.readLong());
 		}
 
@@ -105,6 +115,13 @@ public record BoardView(
 			b.writeBlockPos(bed.pos());
 			b.writeBoolean(bed.occupied());
 		});
+		buf.writeCollection(workstations, (b, w) -> {
+			b.writeBlockPos(w.pos());
+			b.writeUtf(w.profession());
+			b.writeBoolean(w.occupied());
+		});
+		buf.writeVarInt(bells);
+		buf.writeVarInt(golems);
 	}
 
 	static BoardView read(FriendlyByteBuf buf) {
@@ -113,6 +130,9 @@ public record BoardView(
 				buf.readList(b -> b.readBlockPos()),
 				buf.readList(b -> new NewsEntry(b.readLong(), b.readVarLong(), b.readEnum(NewsType.class), b.readList(FriendlyByteBuf::readUtf))),
 				buf.readList(VillagerView::read),
-				buf.readList(b -> new BedView(b.readBlockPos(), b.readBoolean())));
+				buf.readList(b -> new BedView(b.readBlockPos(), b.readBoolean())),
+				buf.readList(b -> new WorkstationView(b.readBlockPos(), b.readUtf(), b.readBoolean())),
+				buf.readVarInt(),
+				buf.readVarInt());
 	}
 }

@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import fr.villageboard.Config;
 import fr.villageboard.VillageBoard;
 import fr.villageboard.block.ModBlocks;
+import fr.villageboard.item.ContractKind;
 import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BorderView;
 import fr.villageboard.net.Payloads;
@@ -77,7 +78,7 @@ public final class VillageManager {
 	/** Parents d'un bébé, entre sa création et son apparition dans le monde. */
 	private final Map<UUID, String> pendingParents = new HashMap<>();
 	private final VillagerActions actions;
-	private final WorkAssignments assignments;
+	private final Assignments assignments;
 	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
 	boolean bypassFreeze;
 	private int ticks;
@@ -86,7 +87,7 @@ public final class VillageManager {
 		this.server = server;
 		this.file = server.getWorldPath(LevelResource.ROOT).resolve("villageboard").resolve("villages.json");
 		this.actions = new VillagerActions(this, server);
-		this.assignments = new WorkAssignments(this, server);
+		this.assignments = new Assignments(this, server);
 	}
 
 	public static VillageManager get() {
@@ -273,7 +274,7 @@ public final class VillageManager {
 			}
 		}
 		news(v, NewsType.FOUNDED, v.name, String.valueOf(v.villagers.size()));
-		Housing.scan(level, v, config.defaultRadius);
+		updateFacilities(level, v);
 		save(true);
 		broadcastBorders();
 		if (placer instanceof ServerPlayer player) {
@@ -399,13 +400,18 @@ public final class VillageManager {
 					live != null ? memory(live, MemoryModuleType.JOB_SITE) : null,
 					r.home == null ? null : BlockPos.of(r.home),
 					r.boundSite == null ? null : BlockPos.of(r.boundSite),
+					r.boundHome == null ? null : BlockPos.of(r.boundHome),
 					r.firstSeenDay, r.born, r.parents == null ? "" : r.parents, r.lastSeen));
 		}
-		List<BoardView.BedView> beds = Housing.beds(v).stream()
+		List<BoardView.BedView> beds = Facilities.beds(v).stream()
 				.map(b -> new BoardView.BedView(b.pos(), b.occupied()))
 				.toList();
+		List<BoardView.WorkstationView> workstations = Facilities.workstations(v).stream()
+				.map(w -> new BoardView.WorkstationView(w.pos(), w.profession(), w.occupied()))
+				.toList();
 		return new BoardView(v.id, v.name, currentDay(), canManage(player, v), v.founderName, v.boardPos(),
-				config.defaultRadius, v.polygon(), List.copyOf(v.news), list, beds);
+				config.defaultRadius, v.polygon(), List.copyOf(v.news), list, beds, workstations,
+				Facilities.bells(v), v.golems);
 	}
 
 	private static BlockPos memory(Villager villager, MemoryModuleType<GlobalPos> type) {
@@ -455,7 +461,12 @@ public final class VillageManager {
 					}
 					case UNBIND -> {
 						if (requireLoaded(player, live)) {
-							assignments.unbind(live, true);
+							assignments.unbind(live, Assignments.Kind.WORK, true);
+						}
+					}
+					case UNBIND_HOME -> {
+						if (requireLoaded(player, live)) {
+							assignments.unbind(live, Assignments.Kind.HOME, true);
 						}
 					}
 					case FORGET -> {
@@ -493,16 +504,17 @@ public final class VillageManager {
 
 	// ------------------------------------------------------------------ contrat de travail
 
-	public void useContractOnVillager(ServerPlayer player, ItemStack stack, Villager villager) {
-		assignments.selectVillager(player, stack, villager);
+	public void useContractOnVillager(ServerPlayer player, ItemStack stack, Villager villager, ContractKind kind) {
+		assignments.selectVillager(player, stack, villager, kind);
 	}
 
-	public InteractionResult useContractOnBlock(ServerPlayer player, ItemStack stack, BlockPos pos) {
-		return assignments.useOnBlock(player, stack, pos);
+	public InteractionResult useContractOnBlock(ServerPlayer player, ItemStack stack, BlockPos pos, ContractKind kind) {
+		return assignments.useOnBlock(player, stack, pos, kind);
 	}
 
-	void unbind(Villager villager) {
-		assignments.unbind(villager, false);
+	/** Rompt le lien avec le poste de travail (réinitialisation du métier) ; le lit attitré est conservé. */
+	void unbindWork(Villager villager) {
+		assignments.unbind(villager, Assignments.Kind.WORK, false);
 	}
 
 	// ------------------------------------------------------------------ frontières
@@ -538,20 +550,25 @@ public final class VillageManager {
 			validateBornes(level, dimension);
 			for (Village v : villages.values()) {
 				if (v.dimension.equals(dimension)) {
-					updateHousing(level, v);
+					updateFacilities(level, v);
 				}
 			}
 		}
 	}
 
-	/** Recense les lits et annonce dans la gazette quand il n'y a plus de lit libre (naissances bloquées), ou plus de nouveau. */
-	private void updateHousing(ServerLevel level, Village v) {
-		Housing.scan(level, v, config.defaultRadius);
-		List<Housing.Bed> beds = Housing.beds(v);
+	/**
+	 * Recense lits, postes, cloches et golems ; annonce dans la gazette quand il n'y a plus de lit libre
+	 * (naissances bloquées), ou plus de nouveau.
+	 */
+	private void updateFacilities(ServerLevel level, Village v) {
+		Facilities.scan(level, v, config.defaultRadius);
+		v.golems = level.getEntities(EntityTypes.IRON_GOLEM,
+				g -> g.isAlive() && v.contains(v.dimension, g.getX(), g.getZ(), config.defaultRadius)).size();
+		List<Facilities.Bed> beds = Facilities.beds(v);
 		int free = (int) beds.stream().filter(b -> !b.occupied()).count();
-		Integer changed = Housing.updateState(v, free);
+		Integer changed = Facilities.updateHousingState(v, free);
 		if (changed != null) {
-			if (changed == Housing.FULL) {
+			if (changed == Facilities.FULL) {
 				news(v, NewsType.HOUSING_FULL, String.valueOf(beds.size()));
 			} else {
 				news(v, NewsType.HOUSING_FREE, String.valueOf(free));
@@ -616,7 +633,7 @@ public final class VillageManager {
 				news(inside, NewsType.MOVED_IN, r.displayName(), current.name);
 			} else if (r.outsideSince == 0) {
 				r.outsideSince = System.currentTimeMillis();
-			} else if (announce && r.boundSite == null
+			} else if (announce && r.boundSite == null && r.boundHome == null
 					&& System.currentTimeMillis() - r.outsideSince >= config.leaveDelaySeconds * 1000L) {
 				refresh(r, villager);
 				news(current, NewsType.LEFT, r.displayName(), r.baby ? "child" : r.profession);
@@ -653,6 +670,8 @@ public final class VillageManager {
 		r.home = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).map(h -> h.pos().asLong()).orElse(null);
 		GlobalPos site = villager.getAttached(Attachments.BOUND_SITE);
 		r.boundSite = site == null ? null : site.pos().asLong();
+		GlobalPos boundHome = villager.getAttached(Attachments.BOUND_HOME);
+		r.boundHome = boundHome == null ? null : boundHome.pos().asLong();
 		r.dimension = dim(villager.level());
 		r.x = villager.getX();
 		r.y = villager.getY();
@@ -817,7 +836,7 @@ public final class VillageManager {
 
 	/** Métier figé : verrouillé, ou lié à un poste par un contrat. */
 	public boolean isFrozen(Villager villager) {
-		return !bypassFreeze && (isLocked(villager) || WorkAssignments.isBound(villager));
+		return !bypassFreeze && (isLocked(villager) || Assignments.isBound(villager, Assignments.Kind.WORK));
 	}
 
 	void setLocked(Villager villager, boolean locked) {

@@ -1,32 +1,44 @@
 package fr.villageboard.village;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiRecord;
+import net.minecraft.world.entity.ai.village.poi.PoiType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Lits du territoire, d'après les points d'intérêt « maison » de Minecraft (un par lit, sur la tête du lit).
+ * Équipements du territoire, d'après les points d'intérêt de Minecraft : lits (POI « maison », sur la tête du lit),
+ * postes de travail (avec leur métier) et cloches (POI « lieu de rassemblement »).
  * Seuls les chunks chargés sont relus ; les autres gardent leur dernier état connu (cache par chunk dans le village).
- * Un village sans lit libre ne peut plus avoir de naissances.
  */
-final class Housing {
+final class Facilities {
 
 	record Bed(BlockPos pos, boolean occupied) {
 	}
 
-	/** -1 : inconnu, 0 : aucun lit libre, 1 : au moins un lit libre. */
+	/** Poste de travail ; {@code profession} = identifiant complet du métier qu'il donne. */
+	record Workstation(BlockPos pos, String profession, boolean occupied) {
+	}
+
+	/** Ce qu'on a trouvé dans un chunk. */
+	record ChunkFacilities(List<Bed> beds, List<Workstation> workstations, int bells) {
+	}
+
+	/** État du logement : -1 inconnu, 0 aucun lit libre, 1 au moins un lit libre. */
 	static final int UNKNOWN = -1;
 	static final int FULL = 0;
 	static final int AVAILABLE = 1;
 	/** Nombre de recensements consécutifs avant d'annoncer un changement (évite les va-et-vient). */
 	private static final int CONFIRMATIONS = 2;
 
-	private Housing() {
+	private Facilities() {
 	}
 
 	static void scan(ServerLevel level, Village village, int defaultRadius) {
@@ -55,32 +67,61 @@ final class Housing {
 				if (!level.hasChunk(cx, cz)) {
 					continue;
 				}
-				List<Bed> beds = poi.getInChunk(type -> type.is(PoiTypes.HOME), new ChunkPos(cx, cz), PoiManager.Occupancy.ANY)
-						.filter(r -> village.contains(village.dimension, r.getPos().getX() + 0.5, r.getPos().getZ() + 0.5, defaultRadius))
-						.map(r -> new Bed(r.getPos(), !r.hasSpace()))
-						.toList();
-				village.bedCache.put(chunkKey(cx, cz), beds);
+				List<Bed> beds = new ArrayList<>();
+				List<Workstation> workstations = new ArrayList<>();
+				int bells = 0;
+				List<PoiRecord> records = poi.getInChunk(Facilities::isFacility, new ChunkPos(cx, cz), PoiManager.Occupancy.ANY).toList();
+				for (PoiRecord r : records) {
+					BlockPos pos = r.getPos();
+					if (!village.contains(village.dimension, pos.getX() + 0.5, pos.getZ() + 0.5, defaultRadius)) {
+						continue;
+					}
+					Holder<PoiType> type = r.getPoiType();
+					if (type.is(PoiTypes.HOME)) {
+						beds.add(new Bed(pos, !r.hasSpace()));
+					} else if (type.is(PoiTypes.MEETING)) {
+						bells++;
+					} else {
+						Professions.forPoi(level, type).ifPresent(p ->
+								workstations.add(new Workstation(pos, Professions.key(p), !r.hasSpace())));
+					}
+				}
+				village.facilityCache.put(chunkKey(cx, cz), new ChunkFacilities(beds, workstations, bells));
 			}
 		}
 		final int fx1 = cx1, fx2 = cx2, fz1 = cz1, fz2 = cz2;
-		village.bedCache.keySet().removeIf(key -> {
+		village.facilityCache.keySet().removeIf(key -> {
 			int cx = (int) (key >> 32);
 			int cz = (int) (long) key;
 			return cx < fx1 || cx > fx2 || cz < fz1 || cz > fz2;
 		});
 	}
 
+	private static boolean isFacility(Holder<PoiType> type) {
+		return type.is(PoiTypes.HOME) || type.is(PoiTypes.MEETING) || VillagerProfession.ALL_ACQUIRABLE_JOBS.test(type);
+	}
+
 	static List<Bed> beds(Village village) {
 		List<Bed> all = new ArrayList<>();
-		village.bedCache.values().forEach(all::addAll);
+		village.facilityCache.values().forEach(c -> all.addAll(c.beds()));
 		return all;
+	}
+
+	static List<Workstation> workstations(Village village) {
+		List<Workstation> all = new ArrayList<>();
+		village.facilityCache.values().forEach(c -> all.addAll(c.workstations()));
+		return all;
+	}
+
+	static int bells(Village village) {
+		return village.facilityCache.values().stream().mapToInt(ChunkFacilities::bells).sum();
 	}
 
 	/**
 	 * Met à jour l'état « lits libres / aucun lit libre » et renvoie le nouvel état s'il vient de changer
 	 * (confirmé sur plusieurs recensements), sinon null. Le premier état connu est adopté sans annonce.
 	 */
-	static Integer updateState(Village village, int freeBeds) {
+	static Integer updateHousingState(Village village, int freeBeds) {
 		int state = freeBeds > 0 ? AVAILABLE : FULL;
 		if (village.housingState == UNKNOWN) {
 			village.housingState = state;

@@ -15,6 +15,8 @@ public final class VillagerRecord {
 	public Long home;
 	/** Poste attitré par un contrat de travail (BlockPos compacté), ou null. */
 	public Long boundSite;
+	/** Lit attitré par un bail de logement (BlockPos compacté), ou null. */
+	public Long boundHome;
 	public String dimension;
 	public double x;
 	public double y;

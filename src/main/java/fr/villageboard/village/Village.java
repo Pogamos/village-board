@@ -23,13 +23,15 @@ public final class Village {
 	public Map<String, VillagerRecord> villagers = new LinkedHashMap<>();
 	/** La plus récente en premier. */
 	public List<NewsEntry> news = new ArrayList<>();
-	/** Dernier état annoncé du logement (voir {@link Housing}). */
-	public int housingState = Housing.UNKNOWN;
+	/** Dernier état annoncé du logement (voir {@link Facilities}). */
+	public int housingState = Facilities.UNKNOWN;
 
 	transient boolean dirty;
-	/** Lits connus, par chunk (clé : x << 32 | z). Recalculés au recensement, non sauvegardés. */
-	transient Map<Long, List<Housing.Bed>> bedCache = new HashMap<>();
-	transient int pendingHousingState = Housing.UNKNOWN;
+	/** Lits, postes et cloches connus, par chunk (clé : x << 32 | z). Recalculés au recensement, non sauvegardés. */
+	transient Map<Long, Facilities.ChunkFacilities> facilityCache = new HashMap<>();
+	/** Golems de fer vus sur le territoire au dernier recensement. */
+	transient int golems;
+	transient int pendingHousingState = Facilities.UNKNOWN;
 	transient int pendingHousingCount;
 	private transient List<BlockPos> polygon;
 

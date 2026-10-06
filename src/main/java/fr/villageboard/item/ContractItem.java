@@ -14,15 +14,22 @@ import net.minecraft.world.level.Level;
 import java.util.function.Consumer;
 
 /**
- * Contrat de travail. 1) clic droit sur un villageois : il est inscrit sur le contrat ;
- * 2) clic droit sur un poste de travail : il y est affecté pour de bon (voir VillageManager#assign).
- * Accroupi + clic droit dans le vide : efface le contrat. Les clics sur villageois et blocs sont
- * interceptés dans ServerEvents, avant l'ouverture du commerce ou de l'interface du bloc.
+ * Contrat de travail ou bail de logement. 1) clic droit sur un villageois : il est inscrit dessus ;
+ * 2) clic droit sur un poste de travail (contrat) ou un lit (bail) : il y est lié pour de bon
+ * (voir village.Assignments). Accroupi + clic droit dans le vide : efface le nom inscrit.
+ * Les clics sur villageois et blocs sont interceptés dans ServerEvents, avant le commerce ou l'interface du bloc.
  */
-public class WorkContractItem extends Item {
+public class ContractItem extends Item {
 
-	public WorkContractItem(Properties properties) {
+	private final ContractKind kind;
+
+	public ContractItem(Properties properties, ContractKind kind) {
 		super(properties);
+		this.kind = kind;
+	}
+
+	public ContractKind kind() {
+		return kind;
 	}
 
 	@Override
@@ -48,14 +55,14 @@ public class WorkContractItem extends Item {
 								Consumer<Component> tooltip, TooltipFlag flag) {
 		ContractTarget target = stack.get(ModItems.CONTRACT_TARGET);
 		if (target == null) {
-			tooltip.accept(Component.translatable("villageboard.contract.empty").withStyle(ChatFormatting.GRAY));
+			tooltip.accept(Component.translatable(kind.keyPrefix + "empty").withStyle(ChatFormatting.GRAY));
 			return;
 		}
 		Component who = target.name().isEmpty()
 				? Component.translatable("villageboard.someone.cap")
 				: Component.literal(target.name());
-		tooltip.accept(Component.translatable("villageboard.contract.for", who).withStyle(ChatFormatting.GOLD));
-		tooltip.accept(Component.translatable("villageboard.contract.next").withStyle(ChatFormatting.GRAY));
+		tooltip.accept(Component.translatable(kind.keyPrefix + "for", who).withStyle(ChatFormatting.GOLD));
+		tooltip.accept(Component.translatable(kind.keyPrefix + "next").withStyle(ChatFormatting.GRAY));
 		tooltip.accept(Component.translatable("villageboard.contract.clear").withStyle(ChatFormatting.DARK_GRAY));
 	}
 }
