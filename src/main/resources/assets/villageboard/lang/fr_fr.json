@@ -180,7 +180,7 @@
   "villageboard.gui.legend.child": "Enfant",
   "villageboard.gui.legend.nitwit": "Niais",
   "villageboard.gui.legend.you": "Vous",
-  "villageboard.gui.map_hint": "Molette : zoom · glisser : déplacer · clic sur un habitant : sa fiche",
+  "villageboard.gui.map_hint": "Molette : zoom · glisser : déplacer · entonnoir : choisir les points affichés",
   "villageboard.news.housing_full": "Plus aucun lit libre au village (%s lits) : les naissances sont suspendues.",
   "villageboard.news.housing_free": "%s lit(s) libre(s) : les naissances peuvent reprendre.",
   "villageboard.gui.cat.homeless": "Sans abri",
@@ -244,5 +244,13 @@
   "villageboard.news.home_unbound": "%s n'a plus de lit attitré.",
   "villageboard.gui.bound_home": "Lit attitré : %s",
   "villageboard.map.bound_bed_of": "Lit attitré de : %s",
-  "villageboard.gui.legend.bound_bed": "Lit attitré"
+  "villageboard.gui.legend.bound_bed": "Lit attitré",
+  "villageboard.gui.legend.bornes": "Bornes",
+  "villageboard.gui.map_hint.pin": "Clic sur un habitant, un lit ou un poste : ses liens restent affichés. Re-clic ou clic dans le vide pour le relâcher.",
+  "villageboard.map.info.bed": "Lit : %s",
+  "villageboard.map.info.station": "Poste : %s",
+  "villageboard.map.sheet": "[fiche →]",
+  "villageboard.map.filters": "Filtres et légende",
+  "villageboard.map.zoom_in": "Zoomer",
+  "villageboard.map.zoom_out": "Dézoomer"
 }

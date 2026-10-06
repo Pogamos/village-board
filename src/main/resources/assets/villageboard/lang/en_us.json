@@ -166,7 +166,7 @@
   "villageboard.gui.legend.child": "Child",
   "villageboard.gui.legend.nitwit": "Nitwit",
   "villageboard.gui.legend.you": "You",
-  "villageboard.gui.map_hint": "Wheel: zoom · drag: move · click a villager: their sheet",
+  "villageboard.gui.map_hint": "Wheel: zoom · drag: move · funnel: choose which points to show",
   "villageboard.news.housing_full": "No free bed left in the village (%s beds): births are on hold.",
   "villageboard.news.housing_free": "%s free bed(s): births can resume.",
   "villageboard.gui.cat.homeless": "Homeless",
@@ -230,5 +230,13 @@
   "villageboard.news.home_unbound": "%s no longer has an assigned bed.",
   "villageboard.gui.bound_home": "Assigned bed: %s",
   "villageboard.map.bound_bed_of": "Assigned bed of: %s",
-  "villageboard.gui.legend.bound_bed": "Assigned bed"
+  "villageboard.gui.legend.bound_bed": "Assigned bed",
+  "villageboard.gui.legend.bornes": "Boundary stones",
+  "villageboard.gui.map_hint.pin": "Click a villager, bed or workstation: its links stay shown. Click it again or click empty space to release.",
+  "villageboard.map.info.bed": "Bed: %s",
+  "villageboard.map.info.station": "Workstation: %s",
+  "villageboard.map.sheet": "[sheet →]",
+  "villageboard.map.filters": "Filters and legend",
+  "villageboard.map.zoom_in": "Zoom in",
+  "villageboard.map.zoom_out": "Zoom out"
 }

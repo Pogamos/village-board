@@ -890,8 +890,8 @@ public class BoardScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
-		if (map != null) {
-			map.mouseReleased();
+		if (tab == Tab.TERRITORY && map != null) {
+			map.mouseReleased(event.x(), event.y());
 		}
 		return super.mouseReleased(event);
 	}

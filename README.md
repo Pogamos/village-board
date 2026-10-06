@@ -34,8 +34,11 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   - **Réinitialiser** : le villageois quitte son poste, qui est libéré, perd son XP et ses échanges, puis cherche un nouveau travail.
 - **Territoire** : carte interactive peinte d'après le terrain (comme une carte vanilla) : territoire teinté et cerné,
   villages voisins en bleu, bornes, mairie, habitants colorés par statut, liens vers les postes attitrés, position du joueur.
-  Molette = zoom, glisser = déplacer, survol = nom, clic sur un habitant = sa fiche, boutons + / − / recentrer,
-  « ? » = légende.
+  Molette = zoom, glisser = déplacer, survol = nom, boutons + / − / recentrer / filtres / aide.
+  Un **clic** sur un habitant, un lit ou un poste l'épingle : ses liens (lit, poste) restent affichés et un encart
+  résume où il dort et travaille, avec un lien vers sa fiche. Re-clic ou clic dans le vide pour le relâcher.
+  Le bouton **entonnoir** ouvre la légende, qui sert aussi de filtre : une case par type de point (habitants par statut,
+  lits libres / occupés, postes libres / occupés, bornes, joueur). Les filtres sont gardés tant que le jeu tourne.
 
 ### Besoins du village
 L'onglet **Besoins** liste ce qui manque au village, du plus grave au moins grave (le nombre de besoins importants
