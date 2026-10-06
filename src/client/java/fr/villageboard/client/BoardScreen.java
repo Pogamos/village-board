@@ -65,6 +65,7 @@ public class BoardScreen extends Screen {
 	private static final int LIGHT_TEXT = 0xFFFFF4D6;
 	private static final int ROW_HOVER = 0x22603A1A;
 	private static final int ROW_SELECTED = 0x44603A1A;
+	private static final int CATEGORY_ROW = 14;
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
 	private enum Tab {NEWS, PEOPLE, FAMILY, NEEDS, TERRITORY}
@@ -87,6 +88,8 @@ public class BoardScreen extends Screen {
 	private String category = "all";
 	private UUID selected;
 	private int scroll;
+	/** Défilement de la colonne des catégories (onglet Habitants), indépendant de celui de la liste. */
+	private int categoryScroll;
 	private boolean renaming;
 	private boolean confirmReset;
 	private EditBox nameBox;
@@ -570,6 +573,7 @@ public class BoardScreen extends Screen {
 			}
 		}
 		scroll = 0;
+		categoryScroll = 0;
 		renaming = false;
 		confirmReset = false;
 		showTree = false;
@@ -596,24 +600,34 @@ public class BoardScreen extends Screen {
 		int y1 = contentTop();
 		int y2 = top + boardH - 12;
 
-		int cy = y1;
-		for (Category c : categories()) {
-			boolean active = c.key().equals(category);
-			Hit hit = new Hit(x1 - 2, cy - 2, x1 + 106, cy + 12, () -> {
-				category = c.key();
-				scroll = 0;
-			});
-			if (active) {
-				g.fill(hit.x1, hit.y1, hit.x2, hit.y2, ROW_SELECTED);
-			} else if (hit.contains(mouseX, mouseY)) {
-				g.fill(hit.x1, hit.y1, hit.x2, hit.y2, ROW_HOVER);
+		// Catégories : colonne défilante si elles ne tiennent pas en hauteur (beaucoup de métiers).
+		List<Category> categories = categories();
+		int catTop = y1 - 2;
+		int catTotal = categories.size() * CATEGORY_ROW;
+		categoryScroll = Mth.clamp(categoryScroll, 0, Math.max(0, catTotal - (y2 - catTop)));
+		g.enableScissor(x1 - 2, catTop, x1 + 106, y2);
+		int cy = y1 - categoryScroll;
+		for (Category c : categories) {
+			if (cy + CATEGORY_ROW - 2 > catTop && cy - 2 < y2) {
+				boolean active = c.key().equals(category);
+				Hit hit = new Hit(x1 - 2, Math.max(cy - 2, catTop), x1 + 106, Math.min(cy + 12, y2), () -> {
+					category = c.key();
+					scroll = 0;
+				});
+				if (active) {
+					g.fill(hit.x1, cy - 2, hit.x2, cy + 12, ROW_SELECTED);
+				} else if (hit.contains(mouseX, mouseY)) {
+					g.fill(hit.x1, cy - 2, hit.x2, cy + 12, ROW_HOVER);
+				}
+				g.text(font, c.label(), x1, cy + 1, active ? INK : FADED, false);
+				String count = String.valueOf(c.count());
+				g.text(font, count, x1 + 104 - font.width(count), cy + 1, FADED, false);
+				hits.add(hit);
 			}
-			g.text(font, c.label(), x1, cy + 1, active ? INK : FADED, false);
-			String count = String.valueOf(c.count());
-			g.text(font, count, x1 + 104 - font.width(count), cy + 1, FADED, false);
-			hits.add(hit);
-			cy += 14;
+			cy += CATEGORY_ROW;
 		}
+		g.disableScissor();
+		scrollbar(g, x1 + 107, catTop, y2, catTotal, categoryScroll);
 		g.fill(x1 + 110, y1, x1 + 111, y2, PAPER_EDGE);
 
 		int lx1 = x1 + 116;
@@ -858,13 +872,17 @@ public class BoardScreen extends Screen {
 	}
 
 	private void scrollbar(GuiGraphicsExtractor g, int x, int y1, int y2, int total) {
+		scrollbar(g, x, y1, y2, total, scroll);
+	}
+
+	private void scrollbar(GuiGraphicsExtractor g, int x, int y1, int y2, int total, int offset) {
 		int visible = y2 - y1;
 		if (total <= visible) {
 			return;
 		}
 		g.fill(x, y1, x + 2, y2, PAPER_EDGE);
 		int thumb = Math.max(12, visible * visible / total);
-		int pos = y1 + (int) ((long) (visible - thumb) * scroll / (total - visible));
+		int pos = y1 + (int) ((long) (visible - thumb) * offset / (total - visible));
 		g.fill(x, pos, x + 2, pos + thumb, FADED);
 	}
 
@@ -1061,6 +1079,11 @@ public class BoardScreen extends Screen {
 		}
 		if (tab == Tab.FAMILY) {
 			return villageTree != null && villageTree.mouseScrolled(mouseX, mouseY, scrollY);
+		}
+		// Onglet Habitants, liste affichée : la molette au-dessus des catégories fait défiler la colonne des catégories.
+		if (tab == Tab.PEOPLE && !showTree && selectedVillager() == null && mouseX < contentLeft() + 110) {
+			categoryScroll = Math.max(0, categoryScroll - (int) (scrollY * 12));
+			return true;
 		}
 		scroll = Math.max(0, scroll - (int) (scrollY * 12));
 		return true;
