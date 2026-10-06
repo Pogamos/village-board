@@ -16,6 +16,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Villager.class)
 public abstract class VillagerMixin {
 
+	/** Villageois dont le cerveau est en train de réfléchir (thread serveur) : sert à savoir qui demande {@code canBreed}. */
+	@Unique
+	private static Villager villageboard$thinking;
+
 	/** Posé quand un changement de métier est bloqué (villageois verrouillé ou lié à un poste) : le rafraîchissement du cerveau qui suit est inutile. */
 	@Unique
 	private boolean villageboard$skipBrainRefresh;
@@ -48,6 +52,30 @@ public abstract class VillagerMixin {
 		if (villageboard$skipBrainRefresh) {
 			villageboard$skipBrainRefresh = false;
 			ci.cancel();
+		}
+	}
+
+	@Inject(method = "customServerAiStep", at = @At("HEAD"))
+	private void villageboard$beforeAi(ServerLevel level, CallbackInfo ci) {
+		villageboard$thinking = (Villager) (Object) this;
+	}
+
+	@Inject(method = "customServerAiStep", at = @At("RETURN"))
+	private void villageboard$afterAi(ServerLevel level, CallbackInfo ci) {
+		villageboard$thinking = null;
+	}
+
+	/**
+	 * Couples exclusifs : quand un villageois cherche un partenaire (ou s'apprête à avoir un enfant), le partenaire
+	 * n'est « disponible » que si le couple est permis (pas d'autre conjoint, pas de proche parent).
+	 */
+	@Inject(method = "canBreed", at = @At("RETURN"), cancellable = true)
+	private void villageboard$canBreed(CallbackInfoReturnable<Boolean> cir) {
+		Villager self = (Villager) (Object) this;
+		Villager asking = villageboard$thinking;
+		if (cir.getReturnValueZ() && asking != null && asking != self && VillageManager.get() != null
+				&& !VillageManager.get().mayBreed(asking, self)) {
+			cir.setReturnValue(false);
 		}
 	}
 

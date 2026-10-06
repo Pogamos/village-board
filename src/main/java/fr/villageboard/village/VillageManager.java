@@ -78,6 +78,7 @@ public final class VillageManager {
 	/** Parents d'un bébé, entre sa création et son apparition dans le monde. */
 	private final Map<UUID, Pending> pendingParents = new HashMap<>();
 	private final Genealogy genealogy;
+	private final Marriages marriages;
 	private final VillagerActions actions;
 	private final Assignments assignments;
 	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
@@ -88,6 +89,7 @@ public final class VillageManager {
 		this.server = server;
 		this.file = server.getWorldPath(LevelResource.ROOT).resolve("villageboard").resolve("villages.json");
 		this.genealogy = new Genealogy(file.resolveSibling("family.json"));
+		this.marriages = new Marriages(this);
 		this.actions = new VillagerActions(this, server);
 		this.assignments = new Assignments(this, server);
 	}
@@ -167,6 +169,15 @@ public final class VillageManager {
 
 	public Collection<Village> villages() {
 		return villages.values();
+	}
+
+	Genealogy genealogy() {
+		return genealogy;
+	}
+
+	/** Appelé par le mixin : ces deux villageois peuvent-ils avoir un enfant ensemble (couple, proches parents) ? */
+	public boolean mayBreed(Villager a, Villager b) {
+		return genealogy.allowed(a.getUUID(), b.getUUID());
 	}
 
 	public Village village(String id) {
@@ -477,7 +488,8 @@ public final class VillageManager {
 				refresh(r, live);
 			}
 			list.add(new BoardView.VillagerView(
-					UUID.fromString(r.uuid), r.displayName(), r.profession, r.level, r.baby, r.locked, live != null,
+					UUID.fromString(r.uuid), r.displayName(), r.profession, r.type == null ? Professions.DEFAULT_TYPE : r.type,
+					r.level, r.baby, r.locked, live != null,
 					live != null ? live.getHealth() : 0, live != null ? live.getMaxHealth() : 0,
 					live != null ? live.getVillagerXp() : 0,
 					live != null && r.employed() ? live.getOffers().size() : 0,
@@ -497,9 +509,11 @@ public final class VillageManager {
 		List<BoardView.KinView> family = new ArrayList<>();
 		genealogy.forVillage(v.id, v.villagers.keySet()).forEach((uuid, k) -> {
 			Village elsewhere = k.village == null || k.village.equals(v.id) ? null : villages.get(k.village);
-			family.add(new BoardView.KinView(UUID.fromString(uuid), k.name, k.profession, k.baby,
+			family.add(new BoardView.KinView(UUID.fromString(uuid), k.name, k.profession, k.type, k.baby,
 					k.parents.stream().map(UUID::fromString).toList(), k.born, k.fate, k.fateDay,
-					elsewhere == null ? "" : elsewhere.name));
+					elsewhere == null ? "" : elsewhere.name,
+					k.spouse == null ? null : UUID.fromString(k.spouse), k.marriedDay,
+					k.divorced.stream().map(UUID::fromString).toList(), k.widowed.stream().map(UUID::fromString).toList()));
 		});
 		return new BoardView(v.id, v.name, currentDay(), canManage(player, v), v.founderName, v.boardPos(),
 				config.defaultRadius, v.polygon(), List.copyOf(v.news), list, beds, workstations,
@@ -568,6 +582,14 @@ public final class VillageManager {
 						}
 					}
 					case RENAME_VILLAGE -> renameVillage(v, action.arg());
+					case DIVORCE -> {
+						UUID ex = genealogy.divorce(action.target());
+						if (ex != null) {
+							Kin a = genealogy.get(action.target());
+							Kin b = genealogy.get(ex);
+							news(v, NewsType.DIVORCED, a.name, b == null ? "" : b.name);
+						}
+					}
 					default -> {
 					}
 				}
@@ -598,11 +620,15 @@ public final class VillageManager {
 	// ------------------------------------------------------------------ contrat de travail
 
 	public void useContractOnVillager(ServerPlayer player, ItemStack stack, Villager villager, ContractKind kind) {
-		assignments.selectVillager(player, stack, villager, kind);
+		if (kind == ContractKind.MARRIAGE) {
+			marriages.useOnVillager(player, stack, villager);
+		} else {
+			assignments.selectVillager(player, stack, villager, kind);
+		}
 	}
 
 	public InteractionResult useContractOnBlock(ServerPlayer player, ItemStack stack, BlockPos pos, ContractKind kind) {
-		return assignments.useOnBlock(player, stack, pos, kind);
+		return kind == ContractKind.MARRIAGE ? InteractionResult.PASS : assignments.useOnBlock(player, stack, pos, kind);
 	}
 
 	/** Rompt le lien avec le poste de travail (réinitialisation du métier) ; le lit attitré est conservé. */
@@ -770,6 +796,7 @@ public final class VillageManager {
 		Component custom = villager.getCustomName();
 		r.customName = custom == null ? null : custom.getString();
 		r.profession = Professions.key(villager);
+		r.type = Professions.type(villager);
 		r.level = villager.getVillagerData().level();
 		r.baby = villager.isBaby();
 		r.locked = isLocked(villager);
@@ -839,7 +866,14 @@ public final class VillageManager {
 				.collect(Collectors.joining(" & "));
 		for (Villager p : List.of(parent, partner)) {
 			Village home = index.get(p.getUUID());
-			genealogy.noteParent(p.getUUID(), displayName(p), Professions.key(p), p.isBaby(), home == null ? null : home.id);
+			genealogy.touch(p.getUUID(), displayName(p), Professions.key(p), Professions.type(p), p.isBaby(), home == null ? null : home.id);
+		}
+		// Deux célibataires qui ont un enfant sont mariés d'office.
+		if (genealogy.spouse(parent.getUUID()) == null && genealogy.spouse(partner.getUUID()) == null) {
+			genealogy.marry(parent.getUUID(), partner.getUUID(), currentDay());
+			Village home = index.containsKey(parent.getUUID()) ? index.get(parent.getUUID())
+					: villageAt(dim(parent.level()), parent.getX(), parent.getZ());
+			news(home, NewsType.MARRIED, displayName(parent), displayName(partner), "child");
 		}
 		pendingParents.put(child.getUUID(), new Pending(names, List.of(parent.getUUID(), partner.getUUID())));
 	}
@@ -851,7 +885,8 @@ public final class VillageManager {
 			return;
 		}
 		Village village = villageAt(dim(villager.level()), villager.getX(), villager.getZ());
-		genealogy.birth(villager.getUUID(), pending.parents(), displayName(villager), village == null ? null : village.id, currentDay());
+		genealogy.birth(villager.getUUID(), pending.parents(), displayName(villager), Professions.type(villager),
+				village == null ? null : village.id, currentDay());
 		if (village == null || index.containsKey(villager.getUUID())) {
 			return;
 		}

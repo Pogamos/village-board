@@ -56,11 +56,17 @@ Pièges déjà rencontrés en 26.2 :
     Attention à l'ordre : `refresh` remet le devenir à ALIVE, donc il faut noter la mort ou le départ **après** le dernier `observe`/`refresh`.
   - Tableau retiré (cassé ou disparu, vu par `validateBoards`) : `Village.boardMissing`, le village est conservé. Un tableau
     posé sur son territoire ou près de toutes ses bornes s'y rattache (`orphanFor`, `rebind`). Seul `/villageboard remove` dissout.
+  - Couples : `Kin.spouse` (+ `divorced`, `widowed`), règles dans `Genealogy.allowed` (conjoint exclusif, pas de parent/enfant
+    ni de frères et sœurs). Le mixin note le villageois dont le cerveau tourne (`customServerAiStep`) et fait renvoyer `false` à
+    `canBreed()` des partenaires interdits : la recherche de partenaire (`InteractWith` → `BREED_TARGET`) les ignore donc.
+    Mariage d'office dans `VillageManager.onBreed`, par l'acte de mariage dans `village/Marriages` (`ContractKind.MARRIAGE`).
+    `family.json` est versionné (`{"version": 2, "people": {...}}`) ; la v1 était la carte brute des entrées.
   - `mixin/VillagerMixin` : intercepte `setVillagerData`, ce qui donne les actualités de métier et bloque les changements de métier
     des villageois verrouillés ou liés (`isFrozen`, contourné par `bypassFreeze`), ainsi que `getBreedOffspring` (naissances).
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
-  `FamilyTree` (arbre généalogique), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
+  `FamilyTree` (arbre d'un villageois), `VillageTree` (onglet Familles : arbre de tout le village, zoom et déplacement),
+  `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
   `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
 - Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
 - La gazette stocke un **type + des arguments**, jamais du texte : le client compose la phrase dans sa langue (`Texts.news`).

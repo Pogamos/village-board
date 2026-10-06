@@ -50,7 +50,11 @@ public enum NewsType {
 	/** joueur qui l'a retiré (vide si inconnu) */
 	BOARD_REMOVED("✖", 0xFF8B1A1A),
 	/** coordonnées du nouveau tableau */
-	BOARD_MOVED("⚑", 0xFF5A4A3A);
+	BOARD_MOVED("⚑", 0xFF5A4A3A),
+	/** époux, épouse, « ceremony » (acte de mariage) ou « child » (mariage d'office au premier enfant) */
+	MARRIED("♥", 0xFFC2185B),
+	/** les deux ex-époux */
+	DIVORCED("♡", 0xFF7A6548);
 
 	public final String symbol;
 	public final int color;

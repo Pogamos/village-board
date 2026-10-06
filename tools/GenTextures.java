@@ -19,6 +19,33 @@ public class GenTextures {
         items.mkdirs();
         ImageIO.write(contract(), "png", new File(items, "work_contract.png"));
         ImageIO.write(lease(), "png", new File(items, "housing_lease.png"));
+        ImageIO.write(marriage(), "png", new File(items, "marriage_certificate.png"));
+    }
+
+    /** Acte de mariage : parchemin vierge, deux alliances dorées entrelacées et un sceau rouge en forme de cœur. */
+    static BufferedImage marriage() {
+        BufferedImage img = contract();
+        for (int y = 3; y < 15; y++) {
+            for (int x = 3; x < 13; x++) {
+                set(img, x, y, (x + y) % 5 == 0 ? 0xE6D6AA : 0xF1E4BF);
+            }
+        }
+        int[][] ring = {{1, 0}, {2, 0}, {3, 0}, {0, 1}, {4, 1}, {0, 2}, {4, 2}, {0, 3}, {4, 3}, {1, 4}, {2, 4}, {3, 4}};
+        for (int[] q : ring) {
+            set(img, 3 + q[0], 4 + q[1], 0xD4A017);
+            set(img, 6 + q[0], 5 + q[1], 0xE8B923);
+        }
+        set(img, 4, 4, 0xFFE680);
+        set(img, 7, 5, 0xFFE680);
+        int[][] heart = {{9, 11}, {11, 11}, {8, 12}, {9, 12}, {10, 12}, {11, 12}, {12, 12}, {9, 13}, {10, 13}, {11, 13}, {10, 14}};
+        for (int[] q : heart) {
+            set(img, q[0], q[1], 0xB0202A);
+        }
+        set(img, 9, 12, 0xE05060);
+        for (int x = 4; x <= 7; x++) {
+            set(img, x, 12, 0x5A4632);
+        }
+        return img;
     }
 
     /** Bail de logement : même parchemin, avec une petite maison dessinée et un sceau bleu. */

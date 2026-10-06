@@ -52,6 +52,25 @@ celle du villageois centré s'il est encore au registre.
 Les villageois arrivés adultes n'ont pas de parents connus. Les naissances d'avant la v0.8 sont reprises quand le nom
 de chaque parent ne désigne qu'un seul habitant.
 
+L'onglet **Familles** montre l'arbre de tout le village : un bloc par famille, une ligne par génération, puis les
+habitants sans famille connue. Chaque case montre la tête du villageois (biome et tenue de son métier), son nom et son
+métier. Les morts sont pâlis et marqués ✝, les absents ont un cadre clair. Double trait rouge = mariés, trait pâle =
+veuvage, pointillés = divorcés. Molette = zoom, glisser = déplacer, « Recentrer » pour tout revoir. Un clic sur une case
+ouvre la fiche du villageois, ou son arbre s'il n'est plus au registre.
+
+### Mariages et couples
+- **Mariage d'office** : deux villageois célibataires qui ont un enfant ensemble sont mariés.
+- **Acte de mariage** (papier + plume + poche d'encre + pépite d'or) : clic droit sur un villageois, puis sur son futur
+  conjoint (à moins de 16 blocs). Les deux doivent être adultes, célibataires et ne pas être proches parents.
+- **Couple exclusif** : un villageois marié n'a d'enfants qu'avec son conjoint.
+- **Proches parents** : pas d'enfant ni de mariage entre un parent et son enfant, ni entre frères et sœurs
+  (demi-frères et demi-sœurs compris).
+- **Fin du couple** : à la mort de l'un des deux (l'autre est veuf et peut se remarier), ou par un divorce prononcé
+  depuis la fiche (« [divorcer] », deux clics). Un conjoint parti du village reste marié.
+- La fiche indique le conjoint (et depuis quel jour), le conjoint décédé, ou « Célibataire ». La gazette annonce
+  les mariages et les divorces.
+- Lors du passage à la v0.9, les parents encore en vie et célibataires ont été mariés.
+
 ### Besoins du village
 L'onglet **Besoins** liste ce qui manque au village, du plus grave au moins grave (le nombre de besoins importants
 s'affiche sur l'onglet, avec une épingle rouge en cas d'urgence) :

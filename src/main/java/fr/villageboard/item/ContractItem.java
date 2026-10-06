@@ -14,9 +14,9 @@ import net.minecraft.world.level.Level;
 import java.util.function.Consumer;
 
 /**
- * Contrat de travail ou bail de logement. 1) clic droit sur un villageois : il est inscrit dessus ;
- * 2) clic droit sur un poste de travail (contrat) ou un lit (bail) : il y est lié pour de bon
- * (voir village.Assignments). Accroupi + clic droit dans le vide : efface le nom inscrit.
+ * Contrat de travail, bail de logement ou acte de mariage. 1) clic droit sur un villageois : il est inscrit dessus ;
+ * 2) clic droit sur un poste de travail (contrat), un lit (bail) ou un autre villageois (mariage) : ils sont liés
+ * pour de bon (voir village.Assignments et village.Marriages). Accroupi + clic droit dans le vide : efface le nom inscrit.
  * Les clics sur villageois et blocs sont interceptés dans ServerEvents, avant le commerce ou l'interface du bloc.
  */
 public class ContractItem extends Item {

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:paper",
+    "minecraft:feather",
+    "minecraft:ink_sac",
+    "minecraft:gold_nugget"
+  ],
+  "result": {
+    "id": "villageboard:marriage_certificate"
+  }
+}

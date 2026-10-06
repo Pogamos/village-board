@@ -31,24 +31,32 @@ public record BoardView(
 	 * Entrée de l'état civil : habitants, anciens habitants et leur parenté. {@code village} = nom du village où il vit
 	 * désormais, ou vide s'il est (ou était) de ce village.
 	 */
-	public record KinView(UUID uuid, String name, String profession, boolean baby, List<UUID> parents, long born,
-			Kin.Fate fate, long fateDay, String village) {
+	public record KinView(UUID uuid, String name, String profession, String type, boolean baby, List<UUID> parents,
+			long born, Kin.Fate fate, long fateDay, String village, UUID spouse, long marriedDay,
+			List<UUID> divorced, List<UUID> widowed) {
 
 		void write(FriendlyByteBuf buf) {
 			buf.writeUUID(uuid);
 			buf.writeUtf(name);
 			buf.writeUtf(profession);
+			buf.writeUtf(type);
 			buf.writeBoolean(baby);
 			buf.writeCollection(parents, (b, p) -> b.writeUUID(p));
 			buf.writeVarLong(born + 1);
 			buf.writeEnum(fate);
 			buf.writeVarLong(fateDay);
 			buf.writeUtf(village);
+			buf.writeNullable(spouse, (b, p) -> b.writeUUID(p));
+			buf.writeVarLong(marriedDay);
+			buf.writeCollection(divorced, (b, p) -> b.writeUUID(p));
+			buf.writeCollection(widowed, (b, p) -> b.writeUUID(p));
 		}
 
 		static KinView read(FriendlyByteBuf buf) {
-			return new KinView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readBoolean(), buf.readList(b -> b.readUUID()),
-					buf.readVarLong() - 1, buf.readEnum(Kin.Fate.class), buf.readVarLong(), buf.readUtf());
+			return new KinView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
+					buf.readList(b -> b.readUUID()), buf.readVarLong() - 1, buf.readEnum(Kin.Fate.class), buf.readVarLong(),
+					buf.readUtf(), buf.readNullable(b -> b.readUUID()), buf.readVarLong(),
+					buf.readList(b -> b.readUUID()), buf.readList(b -> b.readUUID()));
 		}
 	}
 
@@ -68,6 +76,7 @@ public record BoardView(
 			UUID uuid,
 			String name,
 			String profession,
+			String type,
 			int level,
 			boolean baby,
 			boolean locked,
@@ -90,6 +99,7 @@ public record BoardView(
 			buf.writeUUID(uuid);
 			buf.writeUtf(name);
 			buf.writeUtf(profession);
+			buf.writeUtf(type);
 			buf.writeVarInt(level);
 			buf.writeBoolean(baby);
 			buf.writeBoolean(locked);
@@ -110,7 +120,7 @@ public record BoardView(
 		}
 
 		static VillagerView read(FriendlyByteBuf buf) {
-			return new VillagerView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readBoolean(),
+			return new VillagerView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readBoolean(),
 					buf.readBoolean(), buf.readBoolean(), buf.readFloat(), buf.readFloat(), buf.readVarInt(), buf.readVarInt(),
 					buf.readBlockPos(), buf.readNullable(b -> b.readBlockPos()), buf.readNullable(b -> b.readBlockPos()), buf.readNullable(b -> b.readBlockPos()),
 					buf.readNullable(b -> b.readBlockPos()),

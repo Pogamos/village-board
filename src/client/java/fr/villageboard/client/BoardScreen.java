@@ -1,6 +1,7 @@
 package fr.villageboard.client;
 
 import fr.villageboard.net.BoardView;
+import fr.villageboard.net.BoardView.KinView;
 import fr.villageboard.net.BoardView.VillagerView;
 import fr.villageboard.net.Payloads;
 import fr.villageboard.net.Payloads.Action;
@@ -37,8 +38,8 @@ import java.util.function.Predicate;
 
 /**
  * Le tableau de la mairie : une planche de liège dans un cadre de bois, avec des parchemins épinglés.
- * Onglets : la gazette, les habitants (liste par métier, fiche, arbre généalogique), les besoins, le territoire
- * (carte et bornes).
+ * Onglets : la gazette, les habitants (liste par métier, fiche, arbre d'un villageois), les familles (arbre de tout le
+ * village), les besoins, le territoire (carte et bornes).
  * La planche s'agrandit avec la fenêtre (entre 320×220 et 460×300 pixels d'interface).
  */
 public class BoardScreen extends Screen {
@@ -60,12 +61,13 @@ public class BoardScreen extends Screen {
 	private static final int GREEN = 0xFF2E7D32;
 	private static final int LINK = 0xFF1F4E8C;
 	private static final int RED_LINK = 0xFF8B1A1A;
+	private static final int MARRIED = 0xFFC2185B;
 	private static final int LIGHT_TEXT = 0xFFFFF4D6;
 	private static final int ROW_HOVER = 0x22603A1A;
 	private static final int ROW_SELECTED = 0x44603A1A;
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
-	private enum Tab {NEWS, PEOPLE, NEEDS, TERRITORY}
+	private enum Tab {NEWS, PEOPLE, FAMILY, NEEDS, TERRITORY}
 
 	private record Row(FormattedCharSequence text, int color, int height) {
 	}
@@ -96,6 +98,8 @@ public class BoardScreen extends Screen {
 	private final FamilyTree tree = new FamilyTree();
 	/** Vrai quand l'onglet Habitants montre l'arbre généalogique (centré sur {@link FamilyTree#focus()}). */
 	private boolean showTree;
+	private VillageTree villageTree;
+	private boolean confirmDivorce;
 	private int left;
 	private int top;
 	private int boardW;
@@ -121,6 +125,10 @@ public class BoardScreen extends Screen {
 			map.setView(newView);
 		}
 		tree.setView(newView);
+		if (villageTree != null) {
+			villageTree.setView(newView);
+		}
+		confirmDivorce = false;
 		needs = VillageNeeds.compute(newView);
 		renaming = false;
 		confirmReset = false;
@@ -178,6 +186,33 @@ public class BoardScreen extends Screen {
 			initSheet(selectedVillager());
 		} else if (tab == Tab.TERRITORY) {
 			initTerritory();
+		} else if (tab == Tab.FAMILY) {
+			initFamilies();
+		}
+	}
+
+	private void initFamilies() {
+		if (villageTree == null) {
+			villageTree = new VillageTree(this::openFromFamilies);
+			villageTree.setView(view);
+		}
+		villageTree.setBounds(contentLeft() + 2, contentTop(), contentRight() - contentLeft() - 4,
+				contentBottomWithButtons() - contentTop() - 2);
+		addRenderableWidget(Button.builder(gui("families.fit"), b -> villageTree.fit())
+				.bounds(contentLeft(), buttonRowY(), 80, 20).build())
+				.setTooltip(Tooltip.create(gui("families.hint")));
+	}
+
+	/** Clic sur une case de l'arbre du village : fiche de l'habitant, ou son arbre s'il n'est plus au registre. */
+	private void openFromFamilies(UUID uuid) {
+		tab = Tab.PEOPLE;
+		scroll = 0;
+		if (view.villagers().stream().anyMatch(v -> v.uuid().equals(uuid))) {
+			selected = uuid;
+			showTree = false;
+			rebuildWidgets();
+		} else {
+			openTree(uuid);
 		}
 	}
 
@@ -341,6 +376,14 @@ public class BoardScreen extends Screen {
 			}
 			case NEEDS -> drawNeeds(g, mouseX, mouseY);
 			case TERRITORY -> drawTerritory(g, mouseX, mouseY);
+			case FAMILY -> {
+				if (villageTree != null) {
+					villageTree.render(g, font, mouseX, mouseY);
+				}
+				int lx = contentLeft() + 86;
+				Component legend = gui("families.legend");
+				line(g, legend, lx, buttonRowY() + 1, contentRight() - lx, FADED);
+			}
 		}
 		super.extractRenderState(g, mouseX, mouseY, partialTick);
 	}
@@ -390,25 +433,31 @@ public class BoardScreen extends Screen {
 		}
 
 		Tab[] tabs = Tab.values();
+		int step = Math.min(72, (boardW - 16) / tabs.length);
+		int tabW = step - 4;
 		for (int i = 0; i < tabs.length; i++) {
 			Tab t = tabs[i];
-			int x1 = left + 8 + i * 72;
-			int x2 = x1 + 68;
+			int x1 = left + 8 + i * step;
+			int x2 = x1 + tabW;
+			int mid = x1 + tabW / 2;
 			boolean active = t == tab;
 			int y1 = active ? top + 28 : top + 30;
 			Hit hit = new Hit(x1, y1, x2, top + 46, () -> selectTab(t));
 			paper(g, x1, y1, x2, top + 46, active ? PAPER : hit.contains(mouseX, mouseY) ? 0xFFE8D8AE : PAPER_DIM);
 			long alerts = t == Tab.NEEDS ? VillageNeeds.important(needs) : 0;
 			boolean urgent = t == Tab.NEEDS && needs.stream().anyMatch(n -> n.severity() == VillageNeeds.Severity.URGENT);
-			pin(g, x1 + 33, y1 + 1);
+			pin(g, mid - 1, y1 + 1);
 			if (urgent) {
-				g.fill(x1 + 32, y1, x1 + 37, y1 + 5, 0xFFFF3B30);
+				g.fill(mid - 2, y1, mid + 3, y1 + 5, 0xFFFF3B30);
 			}
 			MutableComponent label = gui("tab." + t.name().toLowerCase());
 			if (alerts > 0) {
-				label = label.append(" (" + alerts + ")");
+				MutableComponent counted = label.copy().append(" (" + alerts + ")");
+				if (font.width(counted) <= tabW - 4) {
+					label = counted;
+				}
 			}
-			g.text(font, label, x1 + 34 - font.width(label) / 2, y1 + 6, active ? INK : FADED, false);
+			g.text(font, label, mid - font.width(label) / 2, y1 + 6, active ? INK : FADED, false);
 			hits.add(hit);
 		}
 
@@ -697,7 +746,8 @@ public class BoardScreen extends Screen {
 	/** Ligne « Famille » de la fiche : nombre de proches connus et lien vers l'arbre. */
 	private int drawFamily(GuiGraphicsExtractor g, VillagerView v, int x, int y, int width, int mouseX, int mouseY) {
 		if (!tree.known(v.uuid())) {
-			return line(g, gui("family.none"), x, y, width, FADED);
+			y = line(g, gui("family.none"), x, y, width, FADED);
+			return drawMarriage(g, v, x, y, width, mouseX, mouseY);
 		}
 		int[] counts = tree.counts(v.uuid());
 		List<Component> parts = new ArrayList<>();
@@ -718,7 +768,35 @@ public class BoardScreen extends Screen {
 			g.text(font, text, x, y, INK, false);
 			link(g, gui("family.tree"), x + font.width(text) + 4, y, mouseX, mouseY, () -> openTree(v.uuid()));
 		}
-		return y + 10;
+		return drawMarriage(g, v, x, y + 10, width, mouseX, mouseY);
+	}
+
+	/** Ligne « Conjoint » de la fiche (avec [divorcer]), veuvage, ou célibataire. */
+	private int drawMarriage(GuiGraphicsExtractor g, VillagerView v, int x, int y, int width, int mouseX, int mouseY) {
+		KinView k = tree.kin(v.uuid());
+		if (k != null && k.spouse() != null) {
+			KinView spouse = tree.kin(k.spouse());
+			Component text = Component.translatable("villageboard.gui.married_to",
+					Texts.listName(spouse == null ? "" : spouse.name()), k.marriedDay());
+			g.text(font, text, x, y, MARRIED, false);
+			if (view.canManage()) {
+				link(g, confirmDivorce ? gui("divorce.confirm") : gui("divorce"), x + font.width(text) + 4, y, mouseX, mouseY, () -> {
+					if (confirmDivorce) {
+						confirmDivorce = false;
+						send(Action.DIVORCE, v.uuid(), "");
+					} else {
+						confirmDivorce = true;
+					}
+				});
+			}
+			return y + 10;
+		}
+		if (k != null && !k.widowed().isEmpty()) {
+			KinView late = tree.kin(k.widowed().getLast());
+			return line(g, Component.translatable("villageboard.gui.family.widowed", Texts.listName(late == null ? "" : late.name())),
+					x, y, width, FADED);
+		}
+		return v.baby() ? y : line(g, gui("single"), x, y, width, FADED);
 	}
 
 	private void drawTerritory(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -823,6 +901,7 @@ public class BoardScreen extends Screen {
 	private void openSheet(VillagerView v) {
 		selected = v.uuid();
 		showTree = false;
+		confirmDivorce = false;
 		renaming = false;
 		confirmReset = false;
 		rebuildWidgets();
@@ -943,6 +1022,9 @@ public class BoardScreen extends Screen {
 				return true;
 			}
 		}
+		if (tab == Tab.FAMILY && villageTree != null && villageTree.mouseClicked(event.x(), event.y())) {
+			return true;
+		}
 		if (tab == Tab.PEOPLE && showTree && tree.mouseClicked(event.x(), event.y())) {
 			rebuildWidgets();
 			return true;
@@ -955,6 +1037,9 @@ public class BoardScreen extends Screen {
 		if (tab == Tab.TERRITORY && map != null && map.mouseDragged(event.x(), event.y())) {
 			return true;
 		}
+		if (tab == Tab.FAMILY && villageTree != null && villageTree.mouseDragged(event.x(), event.y())) {
+			return true;
+		}
 		return super.mouseDragged(event, dragX, dragY);
 	}
 
@@ -963,6 +1048,9 @@ public class BoardScreen extends Screen {
 		if (tab == Tab.TERRITORY && map != null) {
 			map.mouseReleased(event.x(), event.y());
 		}
+		if (tab == Tab.FAMILY && villageTree != null) {
+			villageTree.mouseReleased(event.x(), event.y());
+		}
 		return super.mouseReleased(event);
 	}
 
@@ -970,6 +1058,9 @@ public class BoardScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
 		if (tab == Tab.TERRITORY) {
 			return map != null && map.mouseScrolled(mouseX, mouseY, scrollY);
+		}
+		if (tab == Tab.FAMILY) {
+			return villageTree != null && villageTree.mouseScrolled(mouseX, mouseY, scrollY);
 		}
 		scroll = Math.max(0, scroll - (int) (scrollY * 12));
 		return true;

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 /**
  * Arbre généalogique d'un villageois, d'après l'état civil reçu du serveur : grands-parents, parents, le villageois
- * entouré de ses frères et sœurs, puis ses enfants. Cliquer sur un parent recentre l'arbre sur lui.
+ * entouré de ses frères et sœurs (et suivi de son conjoint), puis ses enfants. Cliquer sur un parent recentre l'arbre sur lui.
  */
 final class FamilyTree {
 
@@ -32,6 +32,7 @@ final class FamilyTree {
 	private static final int EDGE = 0xFFC9AE7C;
 	private static final int HOVER = 0xFF8B1A1A;
 	private static final int LINE = 0xFF8A6D4A;
+	private static final int MARRIED = 0xFFC2185B;
 
 	/** Case de l'arbre ; {@code uuid} nul pour la case « +n » qui résume les membres qui ne tiennent pas. */
 	private record Node(int x, int y, int w, UUID uuid, List<KinView> hidden) {
@@ -66,6 +67,10 @@ final class FamilyTree {
 
 	boolean known(UUID uuid) {
 		return kin.containsKey(uuid);
+	}
+
+	KinView kin(UUID uuid) {
+		return kin.get(uuid);
 	}
 
 	boolean resident(UUID uuid) {
@@ -116,6 +121,10 @@ final class FamilyTree {
 		List<KinView> row = new ArrayList<>(siblings(focus));
 		row.add(me);
 		row.sort(BY_BIRTH);
+		KinView spouse = me.spouse() == null ? null : kin.get(me.spouse());
+		if (spouse != null && !row.contains(spouse)) {
+			row.add(row.indexOf(me) + 1, spouse);
+		}
 		List<KinView> children = children(focus);
 
 		int rows = (hasGrandparents ? 1 : 0) + (parents.isEmpty() ? 0 : 1) + 1 + (children.isEmpty() ? 0 : 1);
@@ -144,6 +153,8 @@ final class FamilyTree {
 		}
 		List<Node> rowNodes = layout(row, me, nodeW, perRow, cx, y);
 		Node meNode = rowNodes.stream().filter(n -> focus.equals(n.uuid())).findFirst().orElseThrow();
+		Node spouseNode = spouse == null ? null
+				: rowNodes.stream().filter(n -> spouse.uuid().equals(n.uuid())).findFirst().orElse(null);
 		y += step;
 		List<Node> childNodes = children.isEmpty() ? List.of() : layout(children, null, nodeW, perRow, cx, y);
 
@@ -158,10 +169,26 @@ final class FamilyTree {
 			i += count;
 		}
 		if (!parentNodes.isEmpty()) {
-			connect(g, parentNodes, rowNodes);
+			connect(g, parentNodes, rowNodes.stream().filter(n -> n != spouseNode).toList());
+		}
+		if (spouseNode != null) {
+			Node left = meNode.x() < spouseNode.x() ? meNode : spouseNode;
+			Node right = left == meNode ? spouseNode : meNode;
+			int yy = meNode.y() + NODE_H / 2;
+			g.fill(left.x() + left.w(), yy - 1, right.x(), yy, MARRIED);
+			g.fill(left.x() + left.w(), yy + 1, right.x(), yy + 2, MARRIED);
 		}
 		if (!childNodes.isEmpty()) {
-			connect(g, List.of(meNode), childNodes);
+			// Enfants du couple : reliés aux deux ; enfants d'une union précédente : reliés au villageois seul.
+			List<Node> together = spouseNode == null ? List.of() : childNodes.stream()
+					.filter(n -> n.uuid() != null && kin.get(n.uuid()).parents().contains(spouse.uuid())).toList();
+			List<Node> others = childNodes.stream().filter(n -> !together.contains(n)).toList();
+			if (!together.isEmpty()) {
+				connect(g, List.of(meNode, spouseNode), together);
+			}
+			if (!others.isEmpty()) {
+				connect(g, List.of(meNode), others);
+			}
 		}
 
 		Node hovered = null;
@@ -248,7 +275,9 @@ final class FamilyTree {
 		} else {
 			g.fill(x + 1, y + 1, x + n.w() - 1, y + NODE_H - 1, bg);
 		}
-		g.item(Texts.icon(k.baby() ? "child" : k.profession()), x + 3, y + 3);
+		float scale = k.baby() ? 1.4f : 1.8f;
+		VillagerFace.draw(g, x + 3 + (14.4f - VillagerFace.WIDTH * scale) / 2, y + 2 + (18 - VillagerFace.HEIGHT * scale),
+				scale, k.type(), k.profession(), gone);
 		int textW = n.w() - 23;
 		int nameColor = gone ? FADED : k.name().isEmpty() ? FADED : INK;
 		g.text(font, clip(font, displayName(k), textW), x + 21, y + 3, nameColor, false);
@@ -264,6 +293,11 @@ final class FamilyTree {
 			s = s.substring(0, s.length() - 1);
 		}
 		return s + "…";
+	}
+
+	private String nameOf(UUID uuid) {
+		KinView k = kin.get(uuid);
+		return k == null ? Component.translatable("villageboard.gui.unnamed").getString() : displayName(k);
 	}
 
 	private static String displayName(KinView k) {
@@ -302,6 +336,11 @@ final class FamilyTree {
 		} else if (!k.village().isEmpty()) {
 			lines.add(Component.translatable("villageboard.gui.family.lives_in", k.village()));
 		}
+		if (k.spouse() != null) {
+			lines.add(Component.translatable("villageboard.gui.family.spouse", nameOf(k.spouse())));
+		}
+		k.widowed().forEach(u -> lines.add(Component.translatable("villageboard.gui.family.widowed", nameOf(u))));
+		k.divorced().forEach(u -> lines.add(Component.translatable("villageboard.gui.family.divorced", nameOf(u))));
 		List<KinView> parents = parents(k.uuid());
 		if (!parents.isEmpty()) {
 			lines.add(Component.translatable("villageboard.gui.family.parents_of",

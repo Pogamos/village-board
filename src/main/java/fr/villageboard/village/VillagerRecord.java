@@ -8,6 +8,8 @@ public final class VillagerRecord {
 	public String customName;
 	/** Identifiant complet, ex. « minecraft:librarian ». */
 	public String profession = "minecraft:none";
+	/** Type (biome) du villageois, ex. « minecraft:plains » : sert à dessiner son visage. */
+	public String type = Professions.DEFAULT_TYPE;
 	public int level = 1;
 	public boolean baby;
 	public boolean locked;

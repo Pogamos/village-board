@@ -13,12 +13,18 @@ public final class Professions {
 
 	public static final String NONE = "minecraft:none";
 	public static final String NITWIT = "minecraft:nitwit";
+	public static final String DEFAULT_TYPE = "minecraft:plains";
 
 	private Professions() {
 	}
 
 	public static String key(Villager villager) {
 		return key(villager.getVillagerData().profession());
+	}
+
+	/** Type (biome) du villageois : « minecraft:plains », « minecraft:desert »… */
+	public static String type(Villager villager) {
+		return villager.getVillagerData().type().unwrapKey().map(k -> k.identifier().toString()).orElse(DEFAULT_TYPE);
 	}
 
 	public static String key(Holder<VillagerProfession> profession) {

@@ -107,6 +107,9 @@ final class Texts {
 			case ASSIGNED -> Component.translatable(key, who(a.get(0)), professionLower(a.get(1)), a.get(2));
 			case HOME_ASSIGNED -> Component.translatable(key, who(a.get(0)), a.get(1));
 			case HOME_UNBOUND -> Component.translatable(key, whoCap(a.get(0)));
+			case MARRIED -> Component.translatable(a.size() > 2 && a.get(2).equals("child") ? key + "_child" : key,
+					whoCap(a.get(0)), who(a.get(1)));
+			case DIVORCED -> Component.translatable(key, whoCap(a.get(0)), who(a.get(1)));
 			case BOARD_REMOVED -> a.get(0).isEmpty()
 					? Component.translatable(key + "_unknown")
 					: Component.translatable(key, a.get(0));

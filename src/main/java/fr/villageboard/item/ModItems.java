@@ -24,6 +24,8 @@ public final class ModItems {
 	public static final Item WORK_CONTRACT = register("work_contract", ContractKind.WORK);
 	/** Bail de logement : lie un villageois à un lit précis. */
 	public static final Item HOUSING_LEASE = register("housing_lease", ContractKind.HOME);
+	/** Acte de mariage : marie deux villageois. */
+	public static final Item MARRIAGE_CERTIFICATE = register("marriage_certificate", ContractKind.MARRIAGE);
 
 	private ModItems() {
 	}
@@ -39,6 +41,7 @@ public final class ModItems {
 				.register(output -> {
 					output.accept(WORK_CONTRACT);
 					output.accept(HOUSING_LEASE);
+					output.accept(MARRIAGE_CERTIFICATE);
 				});
 	}
 }
