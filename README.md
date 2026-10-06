@@ -42,6 +42,30 @@ Tableau de la mairie        Borne du village (×4)            Contrat de travail
   son statut **et** son logement sont cochés : décocher « Logés » ne laisse voir que les sans-abri, qui ont un contour orange.
   Les filtres sont gardés tant que le jeu tourne.
 
+### Parler aux villageois
+Un clic droit sur un villageois (mains vides ou objet ordinaire) ne lance plus directement les échanges : il dit d'abord
+une **réplique**, affichée dans une boîte en bas de l'écran (tête, nom, métier, texte qui s'écrit lettre par lettre).
+Un **second clic droit** sur lui dans les 10 secondes ouvre les échanges. Accroupi + clic droit ouvre les échanges
+directement ; une étiquette, une laisse ou un œuf d'apparition gardent leur effet normal. Les enfants, niais et
+sans-emploi parlent aussi (à chaque clic).
+
+Les répliques sont dans **`config/villageboard/dialogues.txt` sur le serveur** (créé avec des exemples au premier lancement,
+relu automatiquement à chaque modification) :
+
+```
+[tous]
+Bonjour, {joueur} !
+[fermier]
+Les carottes poussent bien cette année.
+[marie]
+{conjoint} m'attend à la maison.
+```
+
+Sections : `[tous]`, `[enfant]`, un métier (`[fermier]`, `[bibliothecaire]`… ou l'identifiant vanilla), `[sans_abri]`,
+`[marie]`, `[veuf]`, `[celibataire]`, `[parent]`, `[nuit]`, `[pluie]`. Variables : `{joueur}`, `{nom}`, `{metier}`,
+`{village}`, `{conjoint}` ; une réplique dont une variable n'a pas de valeur (villageois sans nom…) n'est pas choisie.
+La réplique est tirée au hasard parmi toutes les sections qui concernent le villageois, sans répéter la précédente.
+
 ### Fiche au commerce
 Quand on ouvre les échanges d'un villageois (clic droit), une petite fiche s'affiche à côté de la fenêtre de commerce :
 sa tête, son nom, son métier et son niveau, sa santé, son village, son lit et son poste (en doré s'ils sont attitrés),

@@ -11,7 +11,11 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.Villager;
 
@@ -52,15 +56,29 @@ public final class ServerEvents {
 			}
 		});
 
-		// Contrat de travail et bail : interceptés avant le commerce avec le villageois / l'interface du bloc.
+		// Contrat, bail et acte de mariage : interceptés avant le commerce avec le villageois / l'interface du bloc.
+		// Les mains vides (ou un objet ordinaire) : le villageois dit d'abord une réplique (voir VillageManager.talk).
 		UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
-			if (!(entity instanceof Villager villager) || !(player.getItemInHand(hand).getItem() instanceof ContractItem contract)) {
+			if (!(entity instanceof Villager villager)) {
 				return InteractionResult.PASS;
 			}
-			if (player instanceof ServerPlayer serverPlayer && VillageManager.get() != null) {
-				VillageManager.get().useContractOnVillager(serverPlayer, player.getItemInHand(hand), villager, contract.kind());
+			ItemStack stack = player.getItemInHand(hand);
+			if (stack.getItem() instanceof ContractItem contract) {
+				if (player instanceof ServerPlayer serverPlayer && VillageManager.get() != null) {
+					VillageManager.get().useContractOnVillager(serverPlayer, stack, villager, contract.kind());
+				}
+				return InteractionResult.SUCCESS;
 			}
-			return InteractionResult.SUCCESS;
+			// Accroupi, ou avec une étiquette, une laisse, un œuf d'apparition : comportement vanilla, sans réplique.
+			if (hand != InteractionHand.MAIN_HAND || player.isShiftKeyDown() || player.isSpectator()
+					|| stack.is(Items.NAME_TAG) || stack.is(Items.LEAD) || stack.getItem() instanceof SpawnEggItem) {
+				return InteractionResult.PASS;
+			}
+			if (player instanceof ServerPlayer serverPlayer && VillageManager.get() != null
+					&& VillageManager.get().talk(serverPlayer, villager)) {
+				return InteractionResult.SUCCESS;
+			}
+			return InteractionResult.PASS;
 		});
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(player instanceof ServerPlayer serverPlayer) || !(player.getItemInHand(hand).getItem() instanceof ContractItem contract)

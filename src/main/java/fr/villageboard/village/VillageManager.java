@@ -10,6 +10,7 @@ import fr.villageboard.item.ContractKind;
 import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BorderView;
 import fr.villageboard.net.Payloads;
+import fr.villageboard.net.Dialogue;
 import fr.villageboard.net.VillagerCard;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -22,6 +23,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -80,6 +83,11 @@ public final class VillageManager {
 	private final Map<UUID, Pending> pendingParents = new HashMap<>();
 	private final Genealogy genealogy;
 	private final Marriages marriages;
+	private final Dialogues dialogues = new Dialogues();
+	/** Dernier villageois à qui chaque joueur a parlé : un second clic droit dans le délai ouvre les échanges. */
+	private final Map<UUID, Talk> talks = new HashMap<>();
+	/** Dernière réplique de chaque villageois, pour ne pas la répéter deux fois de suite. */
+	private final Map<UUID, String> lastLines = new HashMap<>();
 	private final VillagerActions actions;
 	private final Assignments assignments;
 	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
@@ -102,6 +110,7 @@ public final class VillageManager {
 	static void start(MinecraftServer server) {
 		instance = new VillageManager(server);
 		instance.load();
+		instance.dialogues.load();
 	}
 
 	static void stop() {
@@ -479,6 +488,61 @@ public final class VillageManager {
 			return;
 		}
 		ServerPlayNetworking.send(player, new Payloads.OpenBoard(view(v, player)));
+	}
+
+	private record Talk(UUID villager, int tick) {
+	}
+
+	/** Délai (ticks) pendant lequel un second clic droit sur le même villageois ouvre les échanges. */
+	private static final int TALK_WINDOW = 10 * 20;
+
+	/**
+	 * Clic droit sur un villageois (sans objet particulier en main) : il dit une réplique du fichier des dialogues.
+	 * Un second clic droit sur lui dans les 10 s laisse les échanges s'ouvrir normalement.
+	 *
+	 * @return vrai si le villageois a parlé (l'interaction s'arrête là), faux pour laisser faire le jeu
+	 */
+	public boolean talk(ServerPlayer player, Villager villager) {
+		if (!ServerPlayNetworking.canSend(player, Dialogue.TYPE)) {
+			return false;
+		}
+		int now = server.getTickCount();
+		Talk last = talks.get(player.getUUID());
+		if (last != null && last.villager().equals(villager.getUUID()) && now - last.tick() <= TALK_WINDOW) {
+			talks.remove(player.getUUID());
+			return false;
+		}
+		VillagerRecord r = observe(villager, true);
+		Village village = index.get(villager.getUUID());
+		Kin k = genealogy.get(villager.getUUID());
+		String spouse = "";
+		if (k != null && k.spouse != null) {
+			Kin s = genealogy.get(UUID.fromString(k.spouse));
+			spouse = s == null ? "" : s.name;
+		}
+		String profession = Professions.key(villager);
+		String name = displayName(villager);
+		boolean homeless = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).isEmpty();
+		ServerLevel level = player.level();
+		Dialogues.Context context = new Dialogues.Context(!name.isEmpty(), Dialogues.professionKey(profession),
+				villager.isBaby(), homeless, k != null && k.spouse != null, k != null && k.spouse == null && !k.widowed.isEmpty(),
+				!spouse.isEmpty(), genealogy.childCount(villager.getUUID()) > 0, village != null,
+				level.isDarkOutside(), level.isRaining());
+		String line = dialogues.pick(context, lastLines.get(villager.getUUID()));
+		if (line == null) {
+			return false;
+		}
+		lastLines.put(villager.getUUID(), line);
+		boolean canTrade = !villager.isBaby() && !profession.equals(Professions.NONE) && !profession.equals(Professions.NITWIT);
+		if (canTrade) {
+			talks.put(player.getUUID(), new Talk(villager.getUUID(), now));
+		}
+		ServerPlayNetworking.send(player, new Dialogue(villager.getUUID(), name, profession, Professions.type(villager),
+				villager.isBaby(), line, village == null ? "" : village.name, spouse, player.getPlainTextName(), canTrade));
+		level.playSound(null, villager.blockPosition(), SoundEvents.VILLAGER_AMBIENT, SoundSource.NEUTRAL, 1f,
+				villager.isBaby() ? 1.5f : 1f);
+		villager.getLookControl().setLookAt(player, 30f, 30f);
+		return true;
 	}
 
 	/** Fiche résumée envoyée à l'ouverture des échanges avec un villageois (appelé par le mixin). */

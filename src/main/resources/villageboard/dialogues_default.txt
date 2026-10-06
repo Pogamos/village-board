@@ -1,0 +1,140 @@
+# Répliques des villageois (Village Board)
+#
+# Une réplique par ligne, rangée sous une section entre crochets. Les lignes qui commencent par # sont ignorées.
+# Le fichier est relu automatiquement dès qu'il est enregistré : pas besoin de redémarrer le serveur.
+#
+# Quand un joueur parle à un villageois, une réplique est tirée au hasard parmi toutes les sections qui le concernent :
+#   [tous]          tous les adultes
+#   [enfant]        les enfants (ils ne disent que ces répliques ; à défaut, celles de [tous])
+#   un métier       [armurier] [boucher] [cartographe] [clerc] [fermier] [pecheur] [archer] [maroquinier]
+#                   [bibliothecaire] [macon] [berger] [outilleur] [forgeron] [niais] [sans_emploi]
+#                   (les identifiants vanilla marchent aussi : [farmer], [minecraft:librarian]…)
+#   [sans_abri]     n'a pas de lit
+#   [marie]         est marié          [veuf]    a perdu son conjoint     [celibataire]  n'a jamais été marié
+#   [parent]        a au moins un enfant
+#   [nuit]          il fait nuit       [pluie]   il pleut
+#
+# Variables : {joueur} {nom} {metier} {village} {conjoint}
+# Une réplique qui utilise une variable sans valeur est écartée : {nom} pour un villageois sans nom,
+# {conjoint} pour un célibataire, {village} hors de tout village.
+
+[tous]
+Bonjour, {joueur} !
+Belle journée, n'est-ce pas ?
+Hmm ?
+Vous cherchez quelque chose ?
+On dit qu'il y a des pillards dans la région… Soyez prudent.
+Je m'appelle {nom}. Enchanté !
+Bienvenue à {village}, voyageur.
+Le maire devrait vraiment réparer ce chemin.
+Avez-vous des émeraudes ? Tout le monde aime les émeraudes.
+Encore vous ? Ha ! Je plaisante.
+On est bien, à {village}.
+
+[enfant]
+On joue à chat ? C'est toi le chat !
+Quand je serai grand, je serai {metier} !
+Tu as vu le golem ? Il est trop grand !
+Maman dit que je ne dois pas parler aux inconnus…
+Hihi !
+
+[fermier]
+Les carottes poussent bien cette année.
+Un peu de pluie ne ferait pas de mal aux cultures.
+Rien ne vaut le pain fait avec son propre blé.
+Si vous avez des graines en trop, je prends !
+
+[bibliothecaire]
+Les livres ne se rangent pas tout seuls, vous savez.
+Chut ! On est dans une bibliothèque… enfin, presque.
+J'ai un enchantement qui pourrait vous intéresser.
+Savoir, c'est pouvoir. Et le papier, c'est cher.
+
+[cartographe]
+Le monde est bien plus grand qu'on ne le croit.
+J'ai entendu parler d'un manoir perdu dans la forêt sombre…
+Une bonne carte vaut mieux qu'un long détour.
+
+[clerc]
+Que la lumière vous guide, {joueur}.
+J'ai quelques potions… et quelques secrets.
+Les morts-vivants ne dorment jamais vraiment.
+
+[armurier]
+Une bonne armure, c'est la moitié de la victoire.
+Mon fourneau ne s'éteint jamais.
+Vous avez une sale bosse sur votre casque.
+
+[forgeron]
+Une épée bien affûtée ne vous trahira jamais.
+Le fer, c'est bien. Le diamant, c'est mieux.
+
+[outilleur]
+Le bon outil pour le bon travail !
+Une pioche émoussée, c'est une journée perdue.
+
+[boucher]
+Rien ne vaut un bon ragoût de lapin.
+La viande fraîche, c'est ma fierté.
+
+[pecheur]
+Ça mord bien, ce matin.
+Une fois, j'ai pêché une botte. Une vraie botte !
+La mer est calme… pour l'instant.
+
+[berger]
+Mes moutons sont les plus beaux du royaume.
+Vous voulez de la laine ? J'en ai de toutes les couleurs.
+
+[maroquinier]
+Le cuir, ça se travaille avec patience.
+Un bon sac de cuir, et vous voilà paré pour l'aventure.
+
+[macon]
+Cette pierre-là, je l'ai taillée moi-même.
+Un mur droit, c'est un village solide.
+
+[archer]
+Des flèches, encore des flèches !
+Il me faudrait plus de plumes… et de silex.
+
+[niais]
+…
+Hein ?
+J'ai oublié ce que je voulais dire.
+Vous saviez que l'herbe est verte ?
+
+[sans_emploi]
+Je cherche du travail. Vous auriez un poste pour moi ?
+Il paraît qu'on manque de postes de travail, ici.
+Un jour, je trouverai ma vocation.
+
+[sans_abri]
+Je n'ai même pas de lit où dormir…
+Vous ne sauriez pas où trouver un lit libre ?
+Dormir à la belle étoile, ce n'est pas une vie.
+
+[marie]
+{conjoint} m'attend à la maison.
+Avez-vous rencontré {conjoint} ? C'est la plus belle personne du village.
+Mon cœur appartient à {conjoint}.
+
+[veuf]
+Mon conjoint me manque tous les jours…
+La vie continue, il paraît.
+
+[celibataire]
+Je n'ai pas encore trouvé l'âme sœur.
+Vous connaissez quelqu'un de bien, au village ?
+
+[parent]
+Mes enfants grandissent si vite…
+Avez-vous vu mes petits ? Ils ont encore filé.
+
+[nuit]
+Il se fait tard, je devrais aller me coucher.
+Vous avez entendu ce bruit ? Rentrez vite !
+
+[pluie]
+Quel temps de chien !
+La pluie, c'est bon pour les cultures… mais pas pour moi.

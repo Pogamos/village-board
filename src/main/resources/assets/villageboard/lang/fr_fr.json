@@ -322,5 +322,6 @@
   "villageboard.card.no_village": "Hors de tout village",
   "villageboard.card.village": "Village : %s",
   "villageboard.card.homeless": "Sans abri",
-  "villageboard.card.kin": "Enfants : %s · Fratrie : %s"
+  "villageboard.card.kin": "Enfants : %s · Fratrie : %s",
+  "villageboard.dialogue.trade": "Clic droit : échanger"
 }

@@ -23,5 +23,6 @@ public class VillageBoardClient implements ClientModInitializer {
 				context.client().execute(() -> BorderDisplay.setBorders(payload.borders())));
 		ClientTickEvents.END_CLIENT_TICK.register(BorderDisplay::tick);
 		TradeCard.init();
+		DialogueBox.init();
 	}
 }

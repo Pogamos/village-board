@@ -56,6 +56,9 @@ Pièges déjà rencontrés en 26.2 :
     Attention à l'ordre : `refresh` remet le devenir à ALIVE, donc il faut noter la mort ou le départ **après** le dernier `observe`/`refresh`.
   - Tableau retiré (cassé ou disparu, vu par `validateBoards`) : `Village.boardMissing`, le village est conservé. Un tableau
     posé sur son territoire ou près de toutes ses bornes s'y rattache (`orphanFor`, `rebind`). Seul `/villageboard remove` dissout.
+  - Répliques : `village/Dialogues` lit `config/villageboard/dialogues.txt` (copié depuis `resources/villageboard/dialogues_default.txt`,
+    relu quand sa date change). `VillageManager.talk` (appelé par `UseEntityCallback`) envoie `net/Dialogue` au premier clic et
+    annule l'interaction ; un second clic sur le même villageois dans les 10 s laisse vanilla ouvrir les échanges.
   - Couples : `Kin.spouse` (+ `divorced`, `widowed`), règles dans `Genealogy.allowed` (conjoint exclusif, pas de parent/enfant
     ni de frères et sœurs). Le mixin note le villageois dont le cerveau tourne (`customServerAiStep`) et fait renvoyer `false` à
     `canBreed()` des partenaires interdits : la recherche de partenaire (`InteractWith` → `BREED_TARGET`) les ignore donc.
@@ -66,7 +69,7 @@ Pièges déjà rencontrés en 26.2 :
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
 - `src/client/java/fr/villageboard/client/` : `BoardScreen` (écran), `TerritoryMap` (carte, texture dynamique),
   `FamilyTree` (arbre d'un villageois), `VillageTree` (onglet Familles : arbre de tout le village, zoom et déplacement),
-  `TradeCard` (fiche à côté de la fenêtre de commerce : le mixin sur `Villager.startTrading` fait envoyer `net/VillagerCard`,
+  `DialogueBox` (réplique en bas de l'écran, élément du HUD Fabric : `HudElementRegistry`), `TradeCard` (fiche à côté de la fenêtre de commerce : le mixin sur `Villager.startTrading` fait envoyer `net/VillagerCard`,
   dessinée via `ScreenEvents.afterExtract` du `MerchantScreen`), `VillagerFace` (tête dessinée d'après les textures vanilla : face en (8, 8), chapeau en (40, 8), nez en (26, 2)), `BorderDisplay` (particules des frontières, messages d'entrée et de sortie), `Texts` (traductions, actualités),
   `VillageNeeds` (besoins du village, calculés côté client à partir de `BoardView`).
 - Données sur l'entité (Fabric attachments) : `LOCKED`, `BOUND_SITE`, `BOUND_HOME`. `LEGACY_NAME` reste déclaré uniquement pour relire les mondes de la v0.2.
