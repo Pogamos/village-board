@@ -28,6 +28,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
@@ -49,9 +50,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -79,6 +82,8 @@ public final class VillageManager {
 	private final Map<String, Village> villages = new LinkedHashMap<>();
 	/** Village auquel appartient chaque villageois recensé. */
 	private final Map<UUID, Village> index = new HashMap<>();
+	/** Villageois sans abri au dernier recensement : au suivant, on leur cherche un lit lointain (voir {@link #houseHomeless}). */
+	private final Set<UUID> homelessSeen = new HashSet<>();
 	/** Parents d'un bébé, entre sa création et son apparition dans le monde. */
 	private final Map<UUID, Pending> pendingParents = new HashMap<>();
 	private final Genealogy genealogy;
@@ -183,6 +188,22 @@ public final class VillageManager {
 
 	Genealogy genealogy() {
 		return genealogy;
+	}
+
+	/**
+	 * Lit du bébé quand Minecraft n'en trouve pas à 48 blocs de la mère : un lit libre plus loin sur le territoire du
+	 * village, si la mère peut l'atteindre à pied (voir {@link FarBeds}). Appelé par le mixin sur
+	 * {@code VillagerMakeLove.takeVacantBed}.
+	 */
+	public Optional<BlockPos> takeVillageBed(ServerLevel level, Villager mother) {
+		Village v = index.get(mother.getUUID());
+		if (v == null) {
+			v = villageAt(dim(level), mother.getX(), mother.getZ());
+		}
+		if (v == null || !v.dimension.equals(dim(level))) {
+			return Optional.empty();
+		}
+		return FarBeds.take(level, mother, v);
 	}
 
 	/** Appelé par le mixin : ces deux villageois peuvent-ils avoir un enfant ensemble (couple, proches parents) ? */
@@ -766,6 +787,7 @@ public final class VillageManager {
 			for (Village v : villages.values()) {
 				if (v.dimension.equals(dimension)) {
 					updateFacilities(level, v);
+					houseHomeless(level, v);
 				}
 			}
 		}
@@ -787,6 +809,40 @@ public final class VillageManager {
 				news(v, NewsType.HOUSING_FULL, String.valueOf(beds.size()));
 			} else {
 				news(v, NewsType.HOUSING_FREE, String.valueOf(free));
+			}
+		}
+	}
+
+	/** Villageois cherchant un lit lointain par recensement et par village (chaque recherche calcule jusqu'à 3 chemins). */
+	private static final int FAR_BED_SEARCHES = 2;
+
+	/**
+	 * Minecraft ne fait chercher un lit qu'à 48 blocs : un villageois sans abri depuis au moins un recensement (le jeu a eu
+	 * le temps de lui trouver un lit proche) se voit proposer un lit libre plus loin sur le territoire, s'il peut l'atteindre.
+	 */
+	private void houseHomeless(ServerLevel level, Village v) {
+		int searches = 0;
+		for (VillagerRecord r : v.villagers.values()) {
+			UUID uuid = UUID.fromString(r.uuid);
+			Villager villager = live(r);
+			if (villager == null || villager.level() != level) {
+				continue;
+			}
+			boolean homeless = villager.getBrain().getMemory(MemoryModuleType.HOME).filter(this::bedExists).isEmpty()
+					&& !villager.hasAttached(Attachments.BOUND_HOME);
+			if (!homeless) {
+				homelessSeen.remove(uuid);
+				continue;
+			}
+			if (!homelessSeen.add(uuid) && searches < FAR_BED_SEARCHES && FarBeds.anyFor(villager, v)) {
+				searches++;
+				Optional<BlockPos> bed = FarBeds.take(level, villager, v);
+				if (bed.isPresent()) {
+					villager.getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), bed.get()));
+					level.broadcastEntityEvent(villager, EntityEvent.VILLAGER_HAPPY);
+					homelessSeen.remove(uuid);
+					refresh(r, villager);
+				}
 			}
 		}
 	}

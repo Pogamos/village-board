@@ -136,6 +136,10 @@ Les postes de travail apparaissent aussi sur la carte : libres en cyan, occupés
 - La catégorie **Sans abri** de l'onglet Habitants liste les villageois sans lit. Dans chaque fiche, le lit s'affiche avec un lien **[carte]**.
 - La gazette annonce quand il ne reste **plus aucun lit libre** (les villageois ne peuvent alors plus avoir d'enfants),
   puis quand des lits se libèrent.
+- **Lits lointains** : un villageois ne voit les lits qu'à 48 blocs, pour se trouver un lit comme pour celui de son bébé
+  (sans lit, la naissance échoue : éclairs au-dessus des parents). Le mod lui fait voir les lits libres **de tout le
+  territoire du village**, jusqu'à 140 blocs, à condition qu'il puisse y aller à pied : un lit inaccessible le reste.
+  Un sans-abri qui n'a rien trouvé à proximité se voit proposer un lit plus loin au recensement suivant.
 
 Les villageois **sans nom** restent anonymes : « Sans nom » dans les listes, « un villageois sans nom » dans la gazette.
 Un villageois vu hors des bornes pendant 60 s (`leaveDelaySeconds`) est rayé du registre et la gazette annonce son départ.

@@ -69,6 +69,12 @@ Pièges déjà rencontrés en 26.2 :
     `canBreed()` des partenaires interdits : la recherche de partenaire (`InteractWith` → `BREED_TARGET`) les ignore donc.
     Mariage d'office dans `VillageManager.onBreed`, par l'acte de mariage dans `village/Marriages` (`ContractKind.MARRIAGE`).
     `family.json` est versionné (`{"version": 2, "people": {...}}`) ; la v1 était la carte brute des entrées.
+  - `village/FarBeds` : lits libres du village au-delà des 48 blocs de vanilla (recherche de lit `AcquirePoi`, lit du bébé
+    `VillagerMakeLove.takeVacantBed`), jusqu'à 140 blocs (au-delà de 150, `SetWalkTargetFromBlockMemory` fait oublier le lit).
+    Le chemin est vérifié comme vanilla, mais le calcul est élargi par un modificateur temporaire de `FOLLOW_RANGE`
+    (sans quoi `createPath` s'arrête vers 48 blocs). Utilisé par `mixin/VillagerMakeLoveMixin` quand vanilla ne trouve pas de lit
+    (naissance ratée = événement 13, les éclairs), et par `VillageManager.houseHomeless` au recensement pour les sans-abri
+    (au 2e recensement sans abri, 2 villageois par village et par recensement au plus).
   - `mixin/VillagerMixin` : intercepte `setVillagerData`, ce qui donne les actualités de métier et bloque les changements de métier
     des villageois verrouillés ou liés (`isFrozen`, contourné par `bypassFreeze`), ainsi que `getBreedOffspring` (naissances).
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
