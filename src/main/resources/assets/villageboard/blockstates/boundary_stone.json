@@ -1,5 +1,6 @@
 {
-  "variants": {
-    "": { "model": "villageboard:block/boundary_stone" }
-  }
+	"variants": {
+		"half=lower": {"model": "villageboard:block/boundary_stone"},
+		"half=upper": {"model": "villageboard:block/empty"}
+	}
 }

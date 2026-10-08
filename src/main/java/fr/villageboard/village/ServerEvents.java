@@ -1,6 +1,8 @@
 package fr.villageboard.village;
 
+import fr.villageboard.block.BoundaryStoneBlock;
 import fr.villageboard.block.ModBlocks;
+import fr.villageboard.block.TownBoardBlock;
 import fr.villageboard.item.ContractItem;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
@@ -11,6 +13,7 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
@@ -18,6 +21,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.level.block.state.BlockState;
 
 /** Branche le gestionnaire de villages sur les événements du serveur. */
 public final class ServerEvents {
@@ -93,13 +97,20 @@ public final class ServerEvents {
 				return true;
 			}
 			VillageManager m = VillageManager.get();
-			return m == null || m.allowBreak(level, player, pos);
+			return m == null || m.allowBreak(level, player, anchorPos(pos, state));
 		});
 		PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> {
 			if (state.is(ModBlocks.TOWN_BOARD) || state.is(ModBlocks.BOUNDARY_STONE)) {
-				ifRunning(m -> m.afterBreak(level, player, pos));
+				ifRunning(m -> m.afterBreak(level, player, anchorPos(pos, state)));
 			}
 		});
+	}
+
+	private static BlockPos anchorPos(BlockPos pos, BlockState state) {
+		if (state.is(ModBlocks.TOWN_BOARD)) {
+			return TownBoardBlock.getAnchorPos(pos, state);
+		}
+		return BoundaryStoneBlock.getAnchorPos(pos, state);
 	}
 
 	private static void ifRunning(java.util.function.Consumer<VillageManager> action) {

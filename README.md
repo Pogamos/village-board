@@ -6,20 +6,22 @@ Le mod s'installe **sur le serveur et sur chaque client**.
 ## En jeu
 
 ### Fonder un village
-1. Fabriquez un **Tableau de la mairie** et posez-le. Le village est fondé, et les villageois déjà présents sont recensés.
+1. Fabriquez un **Tableau de la mairie** et posez-le : il occupe deux blocs de large et deux blocs de haut, à partir
+   de son bloc inférieur gauche. Le village est fondé, et les villageois déjà présents sont recensés.
    Pour lui donner un nom, renommez le tableau dans une enclume avant de le poser. Sinon, il s'appellera « Village de &lt;joueur&gt; ».
-2. Posez des **Bornes du village** autour du village. Chaque borne se rattache à la mairie la plus proche (à 256 blocs maximum)
+2. Posez des **Bornes du village** autour du village. Une borne réserve deux blocs en hauteur et sa collision mesure
+   un bloc et demi. Chaque borne se rattache à la mairie la plus proche (à 256 blocs maximum)
    et devient un coin du territoire. Avec moins de 3 bornes, le territoire est un cercle provisoire de 48 blocs autour du tableau.
 3. Pour voir les limites, tenez une borne ou un tableau en main : des particules les dessinent au sol. On peut aussi les afficher
    en permanence depuis l'onglet Territoire. Un message s'affiche quand on entre ou sort d'un village.
 
 ```
 Tableau de la mairie        Borne du village (×4)            Contrat de travail (sans forme)
-  [papier][cloche][papier]        [teinture jaune]                 papier + plume + poche d'encre
+  [papier][cloche][papier]             [pierre]                    papier + plume + poche d'encre + émeraude
                                                                  Bail de logement (sans forme)
                                                                  papier + plume + poche d'encre + laine
-  [planches ×3]                   [pierre taillée sculptée]      Acte de mariage (sans forme)
-  [bâton]   [ ]   [bâton]         [muret de pierre taillée]        papier + plume + poche d'encre + pépite d'or
+  [bûches écorcées ×3]            [lingot d'or]                  Acte de mariage (sans forme)
+  [bâton]   [ ]   [bâton]         [magnétite]                      papier + plume + poche d'encre + pépite d'or
 ```
 
 ### Le tableau (clic droit)

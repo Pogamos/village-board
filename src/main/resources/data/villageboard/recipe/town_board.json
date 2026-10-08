@@ -3,7 +3,7 @@
   "category": "misc",
   "key": {
     "P": "minecraft:paper",
-    "W": "#minecraft:planks",
+    "W": "#villageboard:stripped_logs",
     "B": "minecraft:bell",
     "S": "minecraft:stick"
   },
