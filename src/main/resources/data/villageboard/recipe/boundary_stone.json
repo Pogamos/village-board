@@ -2,14 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "building",
   "key": {
-    "C": "minecraft:chiseled_stone_bricks",
-    "W": "minecraft:stone_brick_wall",
-    "Y": "minecraft:yellow_dye"
+    "G": "minecraft:gold_ingot",
+    "L": "minecraft:lodestone",
+    "S": "minecraft:stone"
   },
   "pattern": [
-    "Y",
-    "C",
-    "W"
+    "S",
+    "G",
+    "L"
   ],
   "result": { "id": "villageboard:boundary_stone", "count": 4 }
 }

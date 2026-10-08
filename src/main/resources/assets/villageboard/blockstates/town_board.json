@@ -1,8 +1,20 @@
 {
-  "variants": {
-    "facing=north": { "model": "villageboard:block/town_board" },
-    "facing=east": { "model": "villageboard:block/town_board", "y": 90 },
-    "facing=south": { "model": "villageboard:block/town_board", "y": 180 },
-    "facing=west": { "model": "villageboard:block/town_board", "y": 270 }
-  }
+	"variants": {
+		"facing=north,part=lower_left": {"model": "villageboard:block/town_board", "y": 180},
+		"facing=east,part=lower_left": {"model": "villageboard:block/town_board", "y": 270},
+		"facing=south,part=lower_left": {"model": "villageboard:block/town_board"},
+		"facing=west,part=lower_left": {"model": "villageboard:block/town_board", "y": 90},
+		"facing=north,part=lower_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=east,part=lower_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=south,part=lower_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=west,part=lower_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=north,part=upper_left": {"model": "villageboard:block/empty_town_board"},
+		"facing=east,part=upper_left": {"model": "villageboard:block/empty_town_board"},
+		"facing=south,part=upper_left": {"model": "villageboard:block/empty_town_board"},
+		"facing=west,part=upper_left": {"model": "villageboard:block/empty_town_board"},
+		"facing=north,part=upper_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=east,part=upper_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=south,part=upper_right": {"model": "villageboard:block/empty_town_board"},
+		"facing=west,part=upper_right": {"model": "villageboard:block/empty_town_board"}
+	}
 }

@@ -5,7 +5,9 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import fr.villageboard.Config;
 import fr.villageboard.VillageBoard;
+import fr.villageboard.block.BoundaryStoneBlock;
 import fr.villageboard.block.ModBlocks;
+import fr.villageboard.block.TownBoardBlock;
 import fr.villageboard.item.ContractKind;
 import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BorderView;
@@ -851,9 +853,12 @@ public final class VillageManager {
 	private void validateBoards(ServerLevel level, String dimension) {
 		for (Village v : List.copyOf(villages.values())) {
 			BlockPos pos = v.boardPos();
-			if (!v.boardMissing && v.dimension.equals(dimension) && level.isLoaded(pos)
-					&& !level.getBlockState(pos).is(ModBlocks.TOWN_BOARD)) {
-				boardRemoved(v, null);
+			if (!v.boardMissing && v.dimension.equals(dimension) && level.isLoaded(pos)) {
+				if (level.getBlockState(pos).is(ModBlocks.TOWN_BOARD)) {
+					TownBoardBlock.ensureMultiblock(level, pos);
+				} else {
+					boardRemoved(v, null);
+				}
 			}
 		}
 	}
@@ -867,7 +872,14 @@ public final class VillageManager {
 			}
 			boolean removed = v.bornes.removeIf(packed -> {
 				BlockPos pos = BlockPos.of(packed);
-				return level.isLoaded(pos) && !level.getBlockState(pos).is(ModBlocks.BOUNDARY_STONE);
+				if (!level.isLoaded(pos)) {
+					return false;
+				}
+				if (!level.getBlockState(pos).is(ModBlocks.BOUNDARY_STONE)) {
+					return true;
+				}
+				BoundaryStoneBlock.ensureMultiblock(level, pos);
+				return false;
 			});
 			if (removed) {
 				v.bornesChanged();
