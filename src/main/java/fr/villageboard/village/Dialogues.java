@@ -73,7 +73,8 @@ final class Dialogues {
 
 	/** Empreintes (SHA-256, fins de ligne normalisées) des modèles livrés par les versions précédentes du mod. */
 	private static final Set<String> PREVIOUS_DEFAULTS = Set.of(
-			"54acf0c762f607dffda926c9f05664b9c0286469b31457b3ac435e135df663da"); // v0.11.0
+			"54acf0c762f607dffda926c9f05664b9c0286469b31457b3ac435e135df663da", // v0.11.0
+			"f9b27cfc685f08bbd92f99739828ff75fd26f24cf53cce7be0ddd17bcd133925"); // v1.0.0
 
 	private static final int MAX_LINE = 500;
 
