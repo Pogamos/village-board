@@ -662,6 +662,14 @@ public final class VillageManager {
 				}
 				return;
 			}
+			case LOCATE_SITE, LOCATE_HOME -> {
+				boolean bed = action.action() == Payloads.Action.LOCATE_HOME;
+				BlockPos pos = r == null ? null : bed ? bedOf(r) : siteOf(r, live);
+				if (pos != null) {
+					actions.locatePlace(player, r, pos, bed);
+				}
+				return;
+			}
 			default -> {
 				if (!canManage(player, v)) {
 					player.sendOverlayMessage(Component.translatable("villageboard.msg.no_permission"));
@@ -681,16 +689,6 @@ public final class VillageManager {
 					case RESET -> {
 						if (requireLoaded(player, live)) {
 							actions.resetJob(player, live);
-						}
-					}
-					case UNBIND -> {
-						if (requireLoaded(player, live)) {
-							assignments.unbind(live, Assignments.Kind.WORK, true);
-						}
-					}
-					case UNBIND_HOME -> {
-						if (requireLoaded(player, live)) {
-							assignments.unbind(live, Assignments.Kind.HOME, true);
 						}
 					}
 					case FORGET -> {
@@ -714,6 +712,20 @@ public final class VillageManager {
 			}
 		}
 		sendView(player, v);
+	}
+
+	/** Poste du villageois : l'attitré, sinon celui qu'il occupe (connu seulement s'il est chargé). */
+	private static BlockPos siteOf(VillagerRecord r, Villager live) {
+		if (r.boundSite != null) {
+			return BlockPos.of(r.boundSite);
+		}
+		return live == null ? null : memory(live, MemoryModuleType.JOB_SITE);
+	}
+
+	/** Lit du villageois : l'attitré, sinon celui qu'il occupe. */
+	private static BlockPos bedOf(VillagerRecord r) {
+		Long bed = r.boundHome != null ? r.boundHome : r.home;
+		return bed == null ? null : BlockPos.of(bed);
 	}
 
 	private static boolean requireLoaded(ServerPlayer player, Villager villager) {
@@ -1047,6 +1059,8 @@ public final class VillageManager {
 			observe(villager, true);
 			return;
 		}
+		// Verrouillé dès la naissance : son premier lit et son premier poste lui seront attitrés.
+		villager.setAttached(Attachments.LOCKED, true);
 		Village village = villageAt(dim(villager.level()), villager.getX(), villager.getZ());
 		genealogy.birth(villager.getUUID(), pending.parents(), displayName(villager), Professions.type(villager),
 				village == null ? null : village.id, currentDay());
@@ -1150,20 +1164,21 @@ public final class VillageManager {
 		return Boolean.TRUE.equals(villager.getAttached(Attachments.LOCKED));
 	}
 
-	/** Métier figé : verrouillé, ou lié à un poste par un contrat. */
+	/**
+	 * Métier figé : lié à un poste, ou verrouillé avec un métier. Un villageois verrouillé sans emploi peut prendre
+	 * le premier poste qu'il trouve, qui lui est alors attitré.
+	 */
 	public boolean isFrozen(Villager villager) {
-		return !bypassFreeze && (isLocked(villager) || Assignments.isBound(villager, Assignments.Kind.WORK));
+		return !bypassFreeze && (Assignments.isBound(villager, Assignments.Kind.WORK)
+				|| isLocked(villager) && !Professions.key(villager).equals(Professions.NONE));
 	}
 
+	/** Verrouille (métier, poste et lit) ou libère le villageois. */
 	void setLocked(Villager villager, boolean locked) {
 		if (locked) {
-			villager.setAttached(Attachments.LOCKED, true);
+			assignments.lock(villager);
 		} else {
-			villager.removeAttached(Attachments.LOCKED);
-		}
-		VillagerRecord r = record(villager.getUUID());
-		if (r != null) {
-			refresh(r, villager);
+			assignments.unlock(villager);
 		}
 	}
 
