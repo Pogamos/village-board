@@ -52,6 +52,9 @@ Pièges déjà rencontrés en 26.2 :
   - `village/Assignments` : liaisons permanentes à un poste (contrat de travail, attache `BOUND_SITE`, mémoire `JOB_SITE`)
     ou à un lit (bail de logement, attache `BOUND_HOME`, mémoire `HOME`). `maintain()` réinstalle toutes les 2 s
     les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu. `VillagerActions` : renommer, localiser, verrou, réinitialisation.
+    Verrou (`LOCKED`) = métier figé + poste et lit attitrés (`lock`/`unlock`) ; sans poste ou sans lit, `maintain()` attitre
+    le premier trouvé (`adopt`). Un verrouillé sans emploi peut prendre un métier (`isFrozen`). Verrouillé d'office à la
+    naissance et par un contrat ou un bail ; le déverrouillage rompt les deux liens. Le tableau n'affiche que « Libre ».
   - `village/Territory` : géométrie partagée client/serveur. Polygone des bornes trié par angle autour du barycentre ;
     cercle provisoire avec moins de 3 bornes.
   - `village/Genealogy` + `Kin` : état civil global (`<monde>/villageboard/family.json`) : parents (UUID), naissance,
@@ -97,6 +100,8 @@ Pas de tests automatisés. On vérifie sur le serveur de test via RCON :
 - lire les actualités dans le JSON après `docker compose stop minecraft`.
 
 `/villageboard info <id>` résume ce que le serveur a relevé (lits, postes, cloches, golems, sans-abri, sans-emploi).
+Sans joueur connecté, le serveur se fige au bout de `pause-when-empty-seconds` (mis à 0 dans `server-data/server.properties`) :
+sinon les villageois ne bougent pas pendant les tests RCON.
 Pour simuler un verrou ou une liaison : `data merge entity ... {"fabric:attachments":{"villageboard:locked":1b}}`.
 `data remove` ne fonctionne pas : mettre `0b` à la place.
 

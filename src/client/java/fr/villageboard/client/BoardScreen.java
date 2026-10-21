@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.IntConsumer;
 import java.util.function.Predicate;
 
 /**
@@ -83,6 +84,36 @@ public class BoardScreen extends Screen {
 		}
 	}
 
+	/** Barre de défilement enregistrée pendant le dessin : un clic y amène le curseur, qui se fait ensuite glisser. */
+	private record Bar(int x, int y1, int y2, int total, int offset, IntConsumer scrollTo) {
+		int visible() {
+			return y2 - y1;
+		}
+
+		int thumb() {
+			return Math.max(12, visible() * visible() / total);
+		}
+
+		int thumbY() {
+			return y1 + (int) ((long) (visible() - thumb()) * offset / (total - visible()));
+		}
+
+		/** Zone un peu plus large que la barre (2 pixels), pour l'attraper facilement. */
+		boolean contains(double mx, double my) {
+			return mx >= x - 2 && mx < x + 4 && my >= y1 && my < y2;
+		}
+
+		/** Défilement qui met le haut du curseur à l'ordonnée {@code thumbTop}. */
+		int offsetFor(double thumbTop) {
+			double ratio = (thumbTop - y1) / Math.max(1, visible() - thumb());
+			return (int) Math.round(Mth.clamp(ratio, 0, 1) * (total - visible()));
+		}
+
+		boolean same(Bar other) {
+			return other != null && other.x == x && other.y1 == y1;
+		}
+	}
+
 	private BoardView view;
 	private Tab tab = Tab.NEWS;
 	private String category = "all";
@@ -90,6 +121,9 @@ public class BoardScreen extends Screen {
 	private int scroll;
 	/** Défilement de la colonne des catégories (onglet Habitants), indépendant de celui de la liste. */
 	private int categoryScroll;
+	/** Défilement de la colonne de texte de la fiche, et sa hauteur à l'image précédente. */
+	private int sheetScroll;
+	private int sheetHeight;
 	private boolean renaming;
 	private boolean confirmReset;
 	private EditBox nameBox;
@@ -97,6 +131,15 @@ public class BoardScreen extends Screen {
 	private List<Row> newsRows = List.of();
 	private List<VillageNeeds.Need> needs = List.of();
 	private final List<Hit> hits = new ArrayList<>();
+	private final List<Bar> bars = new ArrayList<>();
+	/** Barre dont le curseur est tenu à la souris, et l'endroit où il a été saisi (depuis son haut). */
+	private Bar dragging;
+	private int dragGrab;
+	/** Bande verticale où les liens sont cliquables (le reste de la fiche est masqué par le défilement). */
+	private int clipTop = Integer.MIN_VALUE;
+	private int clipBottom = Integer.MAX_VALUE;
+	private int lastMouseX;
+	private int lastMouseY;
 	private TerritoryMap map;
 	private final FamilyTree tree = new FamilyTree();
 	/** Vrai quand l'onglet Habitants montre l'arbre généalogique (centré sur {@link FamilyTree#focus()}). */
@@ -249,7 +292,7 @@ public class BoardScreen extends Screen {
 		if (v.loaded()) {
 			Button lock = addRenderableWidget(Button.builder(gui(v.locked() ? "unlock" : "lock"),
 					b -> send(Action.LOCK, v.uuid(), "")).bounds(x + 3 * (bw + gap), y, bw, 20).build());
-			lock.active = manage && v.employed();
+			lock.active = manage;
 			lock.setTooltip(Tooltip.create(gui("lock.tooltip")));
 
 			Button reset = addRenderableWidget(Button.builder(
@@ -349,6 +392,12 @@ public class BoardScreen extends Screen {
 		rebuildWidgets();
 	}
 
+	/** Lien « [localiser] » du poste ou du lit : boussole et repère lumineux, l'écran se ferme pour les suivre. */
+	private void locatePlace(Action action, VillagerView v) {
+		send(action, v.uuid(), "");
+		onClose();
+	}
+
 	private void send(Action action, UUID target, String arg) {
 		ClientPlayNetworking.send(new Payloads.BoardAction(view.id(), action, target, arg));
 	}
@@ -364,6 +413,9 @@ public class BoardScreen extends Screen {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
 		hits.clear();
+		bars.clear();
+		lastMouseX = mouseX;
+		lastMouseY = mouseY;
 		drawHeader(g, mouseX, mouseY);
 		switch (tab) {
 			case NEWS -> drawNews(g);
@@ -627,7 +679,7 @@ public class BoardScreen extends Screen {
 			cy += CATEGORY_ROW;
 		}
 		g.disableScissor();
-		scrollbar(g, x1 + 107, catTop, y2, catTotal, categoryScroll);
+		scrollbar(g, x1 + 107, catTop, y2, catTotal, categoryScroll, value -> categoryScroll = value);
 		g.fill(x1 + 110, y1, x1 + 111, y2, PAPER_EDGE);
 
 		int lx1 = x1 + 116;
@@ -657,10 +709,9 @@ public class BoardScreen extends Screen {
 			g.text(font, describe(v), lx1 + 20, ry + 12, FADED, false);
 			Component right = v.loaded() ? distance(v.pos()) : gui("absent");
 			g.text(font, right, lx2 - 4 - font.width(right), ry + 2, FADED, false);
-			Component badge = v.bound() != null || v.boundHome() != null ? gui("bound_short")
-					: v.locked() ? gui("locked_short") : null;
-			if (badge != null) {
-				g.text(font, badge, lx2 - 4 - font.width(badge), ry + 12, GOLD, false);
+			if (!v.locked()) {
+				Component badge = gui("free_short");
+				g.text(font, badge, lx2 - 4 - font.width(badge), ry + 12, GREEN, false);
 			}
 		}
 		g.disableScissor();
@@ -684,29 +735,24 @@ public class BoardScreen extends Screen {
 			g.text(font, away, (x1 + px2) / 2 - font.width(away) / 2, py2 - 14, FADED, false);
 		}
 
+		// Colonne de texte : elle défile quand elle dépasse (petite fenêtre, famille nombreuse…).
 		int tx = x1 + 86;
-		int width = contentRight() - 6 - tx;
-		int ty = y1;
+		int x2 = contentRight() - 6;
+		int width = x2 - tx;
+		int y2 = renaming ? buttonRowY() - 27 : contentBottomWithButtons();
+		sheetScroll = Mth.clamp(sheetScroll, 0, Math.max(0, sheetHeight - (y2 - y1)));
+		g.enableScissor(tx - 1, y1 - 1, x2, y2);
+		clipTop = y1 - 1;
+		clipBottom = y2;
+		int ty = y1 - sheetScroll;
 		Component title = v.name().isEmpty()
 				? gui("unnamed_villager").withStyle(ChatFormatting.BOLD, ChatFormatting.ITALIC)
 				: Component.literal(v.name()).withStyle(ChatFormatting.BOLD);
 		g.text(font, title, tx, ty, INK, false);
 		ty += 14;
 		ty = line(g, describeLong(v), tx, ty, width, INK);
-		if (v.locked()) {
-			ty = line(g, gui("locked"), tx, ty, width, GOLD);
-		}
-		if (v.bound() != null) {
-			BlockPos station = v.bound();
-			Component bound = Component.translatable("villageboard.gui.bound", coords(station));
-			g.text(font, bound, tx, ty, GOLD, false);
-			int lx = link(g, gui("show_on_map"), tx + font.width(bound) + 4, ty, mouseX, mouseY, () -> showOnMap(station));
-			if (view.canManage() && v.loaded()) {
-				link(g, gui("unbind"), lx + 4, ty, mouseX, mouseY, () -> send(Action.UNBIND, v.uuid(), ""));
-			}
-			ty += 10;
-		} else if (v.employed()) {
-			ty = line(g, gui("not_bound"), tx, ty, width, FADED);
+		if (!v.locked()) {
+			ty = line(g, gui("free"), tx, ty, width, GREEN);
 		}
 		ty += 3;
 		if (v.loaded()) {
@@ -717,26 +763,17 @@ public class BoardScreen extends Screen {
 		}
 		ty = line(g, Component.translatable("villageboard.gui.position", coords(v.pos())).append(" · ").append(distance(v.pos())),
 				tx, ty, width, INK);
-		if (v.loaded()) {
-			ty = line(g, v.jobSite() != null
-					? Component.translatable("villageboard.gui.job_site", coords(v.jobSite()))
-					: gui("job_site.none"), tx, ty, width, INK);
+		BlockPos job = v.bound() != null ? v.bound() : v.jobSite();
+		if (job != null) {
+			ty = placeLine(g, Component.translatable("villageboard.gui.job_site", coords(job)), job, Action.LOCATE_SITE, v,
+					tx, ty, width, mouseX, mouseY);
+		} else if (v.loaded()) {
+			ty = line(g, gui("job_site.none"), tx, ty, width, INK);
 		}
-		if (v.boundHome() != null) {
-			BlockPos bed = v.boundHome();
-			Component home = Component.translatable("villageboard.gui.bound_home", coords(bed));
-			g.text(font, home, tx, ty, GOLD, false);
-			int lx = link(g, gui("show_on_map"), tx + font.width(home) + 4, ty, mouseX, mouseY, () -> showOnMap(bed));
-			if (view.canManage() && v.loaded()) {
-				link(g, gui("unbind"), lx + 4, ty, mouseX, mouseY, () -> send(Action.UNBIND_HOME, v.uuid(), ""));
-			}
-			ty += 10;
-		} else if (v.home() != null) {
-			BlockPos bed = v.home();
-			Component home = Component.translatable("villageboard.gui.home", coords(bed));
-			g.text(font, home, tx, ty, INK, false);
-			link(g, gui("show_on_map"), tx + font.width(home) + 4, ty, mouseX, mouseY, () -> showOnMap(bed));
-			ty += 10;
+		BlockPos bed = v.boundHome() != null ? v.boundHome() : v.home();
+		if (bed != null) {
+			ty = placeLine(g, Component.translatable("villageboard.gui.home", coords(bed)), bed, Action.LOCATE_HOME, v,
+					tx, ty, width, mouseX, mouseY);
 		} else {
 			ty = line(g, freeBeds() > 0 ? gui("homeless.free_beds") : gui("homeless.no_bed"), tx, ty, width, GOLD);
 		}
@@ -750,11 +787,35 @@ public class BoardScreen extends Screen {
 		}
 		ty = drawFamily(g, v, tx, ty, width, mouseX, mouseY);
 		if (!v.loaded()) {
-			line(g, Component.translatable("villageboard.gui.last_seen", Texts.ago(v.lastSeen())), tx, ty, width, FADED);
+			ty = line(g, Component.translatable("villageboard.gui.last_seen", Texts.ago(v.lastSeen())), tx, ty, width, FADED);
 		}
+		g.disableScissor();
+		clipTop = Integer.MIN_VALUE;
+		clipBottom = Integer.MAX_VALUE;
+		sheetHeight = ty + sheetScroll - y1;
+		scrollbar(g, x2 + 2, y1, y2, sheetHeight, sheetScroll, value -> sheetScroll = value);
 		if (renaming) {
 			g.text(font, gui("new_name"), contentLeft() + 2, buttonRowY() - 19, INK, false);
 		}
+	}
+
+	/**
+	 * Ligne « Poste de travail » ou « Lit » de la fiche, suivie de [carte] et [localiser] ; les liens passent à la ligne
+	 * s'ils ne tiennent pas. Renvoie la position y suivante.
+	 */
+	private int placeLine(GuiGraphicsExtractor g, Component text, BlockPos pos, Action locate, VillagerView v,
+			int x, int y, int width, int mouseX, int mouseY) {
+		Component map = gui("show_on_map");
+		Component find = gui("locate_link");
+		g.text(font, text, x, y, INK, false);
+		int lx = x + font.width(text) + 4;
+		if (lx + font.width(map) + 4 + font.width(find) > x + width) {
+			y += 10;
+			lx = x;
+		}
+		lx = link(g, map, lx, y, mouseX, mouseY, () -> showOnMap(pos));
+		link(g, find, lx + 4, y, mouseX, mouseY, () -> locatePlace(locate, v));
+		return y + 10;
 	}
 
 	/** Ligne « Famille » de la fiche : nombre de proches connus et lien vers l'arbre. */
@@ -872,25 +933,29 @@ public class BoardScreen extends Screen {
 	}
 
 	private void scrollbar(GuiGraphicsExtractor g, int x, int y1, int y2, int total) {
-		scrollbar(g, x, y1, y2, total, scroll);
+		scrollbar(g, x, y1, y2, total, scroll, value -> scroll = value);
 	}
 
-	private void scrollbar(GuiGraphicsExtractor g, int x, int y1, int y2, int total, int offset) {
-		int visible = y2 - y1;
-		if (total <= visible) {
+	/** Barre de défilement (si le contenu dépasse) ; {@code scrollTo} reçoit le défilement choisi à la souris. */
+	private void scrollbar(GuiGraphicsExtractor g, int x, int y1, int y2, int total, int offset, IntConsumer scrollTo) {
+		if (total <= y2 - y1) {
 			return;
 		}
+		Bar bar = new Bar(x, y1, y2, total, offset, scrollTo);
+		bars.add(bar);
+		boolean active = bar.same(dragging) || dragging == null && bar.contains(lastMouseX, lastMouseY);
 		g.fill(x, y1, x + 2, y2, PAPER_EDGE);
-		int thumb = Math.max(12, visible * visible / total);
-		int pos = y1 + (int) ((long) (visible - thumb) * offset / (total - visible));
-		g.fill(x, pos, x + 2, pos + thumb, FADED);
+		int pos = bar.thumbY();
+		g.fill(x, pos, x + 2, pos + bar.thumb(), active ? INK : FADED);
 	}
 
-	/** Lien cliquable « [texte] » ; renvoie l'abscisse de sa fin. */
+	/** Lien cliquable « [texte] » ; renvoie l'abscisse de sa fin. Hors de la bande visible, il n'est pas cliquable. */
 	private int link(GuiGraphicsExtractor g, Component text, int x, int y, int mouseX, int mouseY, Runnable action) {
-		Hit hit = new Hit(x, y - 1, x + font.width(text), y + 9, action);
+		Hit hit = new Hit(x, Math.max(y - 1, clipTop), x + font.width(text), Math.min(y + 9, clipBottom), action);
 		g.text(font, text, x, y, hit.contains(mouseX, mouseY) ? RED_LINK : LINK, false);
-		hits.add(hit);
+		if (hit.y1() < hit.y2()) {
+			hits.add(hit);
+		}
 		return hit.x2();
 	}
 
@@ -919,6 +984,7 @@ public class BoardScreen extends Screen {
 	private void openSheet(VillagerView v) {
 		selected = v.uuid();
 		showTree = false;
+		sheetScroll = 0;
 		confirmDivorce = false;
 		renaming = false;
 		confirmReset = false;
@@ -1034,6 +1100,17 @@ public class BoardScreen extends Screen {
 		if (super.mouseClicked(event, doubleClick)) {
 			return true;
 		}
+		// Barre de défilement : le curseur saisi suit la souris ; un clic à côté du curseur l'y amène.
+		for (Bar bar : List.copyOf(bars)) {
+			if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && bar.contains(event.x(), event.y())) {
+				int thumbY = bar.thumbY();
+				boolean onThumb = event.y() >= thumbY && event.y() < thumbY + bar.thumb();
+				dragGrab = onThumb ? (int) event.y() - thumbY : bar.thumb() / 2;
+				dragging = bar;
+				bar.scrollTo().accept(bar.offsetFor(event.y() - dragGrab));
+				return true;
+			}
+		}
 		for (Hit hit : List.copyOf(hits)) {
 			if (hit.contains(event.x(), event.y())) {
 				hit.action().run();
@@ -1052,6 +1129,10 @@ public class BoardScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+		if (dragging != null) {
+			dragging.scrollTo().accept(dragging.offsetFor(event.y() - dragGrab));
+			return true;
+		}
 		if (tab == Tab.TERRITORY && map != null && map.mouseDragged(event.x(), event.y())) {
 			return true;
 		}
@@ -1063,6 +1144,7 @@ public class BoardScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
+		dragging = null;
 		if (tab == Tab.TERRITORY && map != null) {
 			map.mouseReleased(event.x(), event.y());
 		}
@@ -1083,6 +1165,10 @@ public class BoardScreen extends Screen {
 		// Onglet Habitants, liste affichée : la molette au-dessus des catégories fait défiler la colonne des catégories.
 		if (tab == Tab.PEOPLE && !showTree && selectedVillager() == null && mouseX < contentLeft() + 110) {
 			categoryScroll = Math.max(0, categoryScroll - (int) (scrollY * 12));
+			return true;
+		}
+		if (tab == Tab.PEOPLE && !showTree && selectedVillager() != null) {
+			sheetScroll = Math.max(0, sheetScroll - (int) (scrollY * 12));
 			return true;
 		}
 		scroll = Math.max(0, scroll - (int) (scrollY * 12));

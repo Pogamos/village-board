@@ -2,6 +2,8 @@ package fr.villageboard.village;
 
 import fr.villageboard.Config;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -29,7 +31,11 @@ final class VillagerActions {
 	private static final String GLOW_TEAM = "villageboard_glow";
 	private static final String[] ARROWS = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
 
-	private record Tracker(VillagerRecord target, int endTick) {
+	/**
+	 * Boussole d'un joueur : vers un villageois (sa position est suivie), ou vers un bloc (poste, lit) désigné par
+	 * {@code label} et signalé par une colonne de particules.
+	 */
+	private record Tracker(VillagerRecord target, String dimension, BlockPos block, Component label, int endTick) {
 	}
 
 	private final VillageManager manager;
@@ -67,10 +73,21 @@ final class VillagerActions {
 			manager.refresh(r, villager);
 			glow(villager, seconds * 20);
 		}
-		trackers.put(player.getUUID(), new Tracker(r, now + seconds * 20));
+		trackers.put(player.getUUID(), new Tracker(r, null, null, null, now + seconds * 20));
 		player.sendSystemMessage(villager != null
 				? Component.translatable("villageboard.msg.locate", VillageManager.whoCap(r.displayName()), (int) r.x, (int) r.y, (int) r.z, seconds)
 				: Component.translatable("villageboard.msg.locate_unloaded", VillageManager.whoCap(r.displayName()), (int) r.x, (int) r.y, (int) r.z));
+	}
+
+	/** Localise le poste de travail ou le lit d'un villageois : boussole, et colonne de particules au-dessus du bloc. */
+	void locatePlace(ServerPlayer player, VillagerRecord r, BlockPos pos, boolean bed) {
+		int seconds = Config.get().glowSeconds;
+		String key = bed ? "villageboard.place.bed" : "villageboard.place.site";
+		Component label = r.displayName().isEmpty()
+				? Component.translatable(key + ".unnamed")
+				: Component.translatable(key, r.displayName());
+		trackers.put(player.getUUID(), new Tracker(r, r.dimension, pos, label, now + seconds * 20));
+		player.sendSystemMessage(Component.translatable("villageboard.msg.locate_place", label, pos.getX(), pos.getY(), pos.getZ(), seconds));
 	}
 
 	private void glow(Villager villager, int ticks) {
@@ -102,7 +119,13 @@ final class VillagerActions {
 				it.remove();
 				continue;
 			}
-			player.sendOverlayMessage(compass(player, e.getValue().target()));
+			Tracker tracker = e.getValue();
+			player.sendOverlayMessage(compass(player, tracker));
+			if (tracker.block() != null && tracker.dimension().equals(VillageManager.dim(player.level()))) {
+				BlockPos b = tracker.block();
+				player.level().sendParticles(player, ParticleTypes.END_ROD, true, true,
+						b.getX() + 0.5, b.getY() + 2.5, b.getZ() + 0.5, 4, 0.1, 1.5, 0.1, 0.01);
+			}
 		}
 		glowing.entrySet().removeIf(e -> {
 			if (tick <= e.getValue()) {
@@ -113,26 +136,39 @@ final class VillagerActions {
 		});
 	}
 
-	/** « Héloïse  ↗  42 blocs », flèche relative au regard du joueur. */
-	private Component compass(ServerPlayer player, VillagerRecord r) {
-		Villager villager = manager.live(r);
-		if (villager != null) {
-			manager.refresh(r, villager);
+	/** « Héloïse  ↗  42 blocs » ou « Lit d'Héloïse  ↗  42 blocs », flèche relative au regard du joueur. */
+	private Component compass(ServerPlayer player, Tracker tracker) {
+		Component who;
+		String dimension;
+		Vec3 target;
+		if (tracker.block() != null) {
+			who = tracker.label();
+			dimension = tracker.dimension();
+			target = Vec3.atCenterOf(tracker.block());
+		} else {
+			VillagerRecord r = tracker.target();
+			Villager villager = manager.live(r);
+			if (villager != null) {
+				manager.refresh(r, villager);
+			}
+			who = VillageManager.whoCap(r.displayName());
+			dimension = r.dimension;
+			target = new Vec3(r.x, r.y, r.z);
 		}
-		if (r.dimension == null || !r.dimension.equals(VillageManager.dim(player.level()))) {
-			return Component.translatable("villageboard.compass.other_dimension", VillageManager.whoCap(r.displayName())).withStyle(ChatFormatting.GOLD);
+		if (dimension == null || !dimension.equals(VillageManager.dim(player.level()))) {
+			return Component.translatable("villageboard.compass.other_dimension", who).withStyle(ChatFormatting.GOLD);
 		}
-		Vec3 target = new Vec3(r.x, r.y, r.z);
 		double distance = player.position().distanceTo(target);
 		if (distance < 3) {
-			return Component.translatable("villageboard.compass.here", VillageManager.whoCap(r.displayName())).withStyle(ChatFormatting.GREEN);
+			return Component.translatable(tracker.block() != null ? "villageboard.compass.here_place" : "villageboard.compass.here", who)
+					.withStyle(ChatFormatting.GREEN);
 		}
 		double dx = target.x - player.getX();
 		double dz = target.z - player.getZ();
 		double targetYaw = Math.toDegrees(Math.atan2(-dx, dz));
 		double relative = ((targetYaw - player.getYRot()) % 360 + 360) % 360;
 		String arrow = ARROWS[(int) Math.round(relative / 45) % 8];
-		return Component.translatable("villageboard.compass", VillageManager.whoCap(r.displayName()), arrow, (int) distance).withStyle(ChatFormatting.GOLD);
+		return Component.translatable("villageboard.compass", who, arrow, (int) distance).withStyle(ChatFormatting.GOLD);
 	}
 
 	private void unglow(String entry) {
@@ -160,7 +196,8 @@ final class VillagerActions {
 
 	/**
 	 * Le villageois quitte son poste : le poste est libéré proprement (il redevient disponible),
-	 * expérience, niveau et échanges sont perdus, puis il cherche un nouveau travail.
+	 * expérience, niveau et échanges sont perdus, puis il cherche un nouveau travail. Un villageois verrouillé le reste
+	 * (son lit aussi) : le prochain poste qu'il trouvera lui sera attitré.
 	 */
 	void resetJob(ServerPlayer player, Villager villager) {
 		String profession = Professions.key(villager);
@@ -168,7 +205,8 @@ final class VillagerActions {
 			return;
 		}
 		ServerLevel level = (ServerLevel) villager.level();
-		manager.setLocked(villager, false);
+		boolean locked = VillageManager.isLocked(villager);
+		villager.removeAttached(Attachments.LOCKED); // le temps de quitter le métier
 		manager.unbindWork(villager);
 		villager.releasePoi(MemoryModuleType.JOB_SITE);
 		villager.getBrain().eraseMemory(MemoryModuleType.JOB_SITE);
@@ -177,6 +215,13 @@ final class VillagerActions {
 		VillagerData data = villager.getVillagerData();
 		villager.setVillagerData(data.withProfession(level.registryAccess(), VillagerProfession.NONE).withLevel(1));
 		villager.refreshBrain(level);
+		if (locked) {
+			villager.setAttached(Attachments.LOCKED, true);
+		}
+		VillagerRecord r = manager.record(villager.getUUID());
+		if (r != null) {
+			manager.refresh(r, villager);
+		}
 		player.sendOverlayMessage(Component.translatable("villageboard.msg.reset", VillageManager.whoCap(manager.displayName(villager))));
 	}
 }

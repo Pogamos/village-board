@@ -36,6 +36,7 @@ import java.util.Optional;
  * Liaisons permanentes d'un villageois à un poste de travail (contrat de travail) ou à un lit (bail de logement).
  * Un villageois lié garde ce poste ou ce lit : s'il le perd de vue (lit occupé par un joueur, chemin bloqué…),
  * il y est réinstallé ; si le bloc est détruit, le lien est rompu et la gazette l'annonce.
+ * Un villageois verrouillé est lié à son poste et à son lit actuels ; s'il n'en a pas, au premier qu'il trouve.
  */
 final class Assignments {
 
@@ -159,6 +160,9 @@ final class Assignments {
 		}
 
 		Villager evicted = bind(villager, level, pos, kind, profession.orElse(null));
+		if (!VillageManager.isLocked(villager)) {
+			lock(villager); // un contrat ou un bail verrouille le villageois : son lit ou son poste actuel lui est aussi attitré
+		}
 		if (evicted != null) {
 			player.sendSystemMessage(Component.translatable(contract.keyPrefix + "evicted", VillageManager.whoCap(manager.displayName(evicted))));
 		}
@@ -188,6 +192,57 @@ final class Assignments {
 		}
 		BlockPos head = state.getValue(BedBlock.PART) == BedPart.HEAD ? pos : pos.relative(BedBlock.getConnectedDirection(state));
 		return level.getPoiManager().getType(head).filter(t -> t.is(PoiTypes.HOME)).isPresent() ? head : null;
+	}
+
+	// ------------------------------------------------------------------ verrou
+
+	/**
+	 * Verrouille le villageois : son métier est figé (voir {@link VillageManager#isFrozen}), son poste et son lit actuels
+	 * lui sont attitrés. S'il n'a pas de poste ou pas de lit, le premier qu'il trouve lui est attitré par {@link #maintain()}.
+	 */
+	void lock(Villager villager) {
+		villager.setAttached(Attachments.LOCKED, true);
+		for (Kind kind : Kind.values()) {
+			if (!isBound(villager, kind)) {
+				adopt(villager, kind);
+			}
+		}
+		VillagerRecord r = manager.record(villager.getUUID());
+		if (r != null) {
+			manager.refresh(r, villager);
+		}
+	}
+
+	/** Déverrouille : le villageois est libre de changer de métier, de poste et de lit. */
+	void unlock(Villager villager) {
+		villager.removeAttached(Attachments.LOCKED);
+		for (Kind kind : Kind.values()) {
+			villager.removeAttached(kind.attachment);
+		}
+		VillagerRecord r = manager.record(villager.getUUID());
+		if (r != null) {
+			manager.refresh(r, villager);
+		}
+	}
+
+	/** Attitre au villageois le poste ou le lit qu'il s'est trouvé (d'après sa mémoire), si le bloc existe encore. */
+	private void adopt(Villager villager, Kind kind) {
+		Optional<GlobalPos> memory = villager.getBrain().getMemory(kind.memory);
+		if (memory.isEmpty()) {
+			return;
+		}
+		GlobalPos site = memory.get();
+		ServerLevel level = server.getLevel(site.dimension());
+		if (level == null || !level.isLoaded(site.pos())) {
+			return;
+		}
+		boolean valid = kind == Kind.WORK
+				? level.getPoiManager().getType(site.pos()).flatMap(p -> Professions.forPoi(level, p))
+						.filter(p -> villager.getVillagerData().profession().is(p)).isPresent()
+				: level.getPoiManager().getType(site.pos()).filter(t -> t.is(PoiTypes.HOME)).isPresent();
+		if (valid) {
+			villager.setAttached(kind.attachment, site);
+		}
 	}
 
 	// ------------------------------------------------------------------ liaison
@@ -257,12 +312,15 @@ final class Assignments {
 		}
 	}
 
-	/** Réinstalle les villageois liés qui ont perdu leur poste ou leur lit de vue ; rompt le lien si le bloc a disparu. */
+	/**
+	 * Réinstalle les villageois liés qui ont perdu leur poste ou leur lit de vue ; rompt le lien si le bloc a disparu.
+	 * Attitre aux villageois verrouillés le poste ou le lit qu'ils viennent de trouver.
+	 */
 	void maintain() {
 		List<VillagerRecord> bound = new ArrayList<>();
 		for (Village v : manager.villages()) {
 			for (VillagerRecord r : v.villagers.values()) {
-				if (r.boundSite != null || r.boundHome != null) {
+				if (r.locked || r.boundSite != null || r.boundHome != null) {
 					bound.add(r);
 				}
 			}
@@ -275,6 +333,8 @@ final class Assignments {
 			for (Kind kind : Kind.values()) {
 				if (isBound(villager, kind)) {
 					maintain(villager, kind);
+				} else if (VillageManager.isLocked(villager)) {
+					adopt(villager, kind);
 				}
 			}
 			manager.refresh(r, villager);

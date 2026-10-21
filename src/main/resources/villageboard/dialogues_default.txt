@@ -19,203 +19,122 @@
 # {conjoint} pour un célibataire, {village} hors de tout village.
 
 [tous]
-Bonjour, {joueur} ! Belle bite !
+Bonjour, {joueur} !
 Belle journée, n'est-ce pas ?
 Hmm ?
-Ecoute moi bien petit enculé, ici c'est moi le boss, donc bouge ce cul juteux d'ici c'est bon ?
-2027 votez bien !!!!
-Je m'appelle {nom}. SAY MY NAME
-Tu préferes {village} ou Clichy-sous-bois ?
-Le maire est une salope.
-Avez-vous des émeraudes ? Tout le monde aime les émeraudes. Surtout moi. Regarde mon nez bref ;)
-Encore vous ? Ha ! Je plaisante. Enft nn degage la vie
-On est bien, à {village}. On y serait mieux sans-
-Quand le mac débarque, c'est la panique au far west. Jsuis le king d'overwatch, personne ne peut me test.
-Ma série préferée c'est Piky Blinders, thomas shelby a inventé l'aura
-Vincent est hardstuck platine si jamais
-J'aimerais consommer des tonnes d'héroine
-Il parait qu'il y a une secte secrète dans le village... Inquiétant non ??
-Les backrooms de feldup existent... Je vous le jure
-Le love hotel est un classique, j'ai baisé au moins 10000000 fois la bas. Si si je vous jure !!!!
-Je me demande ce qu'il y a derriere ces murailles... J'espere pas une maison rouge en tout cas !!
-Au-delà des murs, il y a la mer... et au-delà de cette mer, il y a la liberté.
-Il y a une carte du monde en haut du batiment violet, voila voila
-Le portail du nether... Brrr je ne m'y aventurerais pas ! On dirait Saint-Denis la bas !!!
-Sebiche ? Oui ce connard pense etre le maire, franchement, on DETESTE ce mec hein
-Le nombre d'usine inhumaine ici.... Faites en plus
-Il y a un homme étrange en haut de cette montagne... Ca fait longtemps qu'on ne l'a pas vu...
-Tu as écouté le dernier titre de Mydriax ??
-Ptitmaisfort, j'ai une haine vicérale contre ce connard
+Vous cherchez quelque chose ?
+On dit qu'il y a des pillards dans la région… Soyez prudent.
+Je m'appelle {nom}. Enchanté !
+Bienvenue à {village}, voyageur.
+Le maire devrait vraiment réparer ce chemin.
+Avez-vous des émeraudes ? Tout le monde aime les émeraudes.
+Encore vous ? Ha ! Je plaisante.
+On est bien, à {village}.
 
 [enfant]
 On joue à chat ? C'est toi le chat !
 Quand je serai grand, je serai {metier} !
 Tu as vu le golem ? Il est trop grand !
-Ici ca bicrave, ARAH !!!!
 Maman dit que je ne dois pas parler aux inconnus…
 Hihi !
-Six seven enfin bref
-Quand je dis tasty tu dis crousty. Crousty ?
 
 [fermier]
 Les carottes poussent bien cette année.
-De temps en temps, je m'enfonce des carottes dans le cul, c'est pas de la terre dessus
 Un peu de pluie ne ferait pas de mal aux cultures.
-Il y a plus de pesticides sur mes cultures que vous le pensez...
 Rien ne vaut le pain fait avec son propre blé.
-Le duo comique McFly & Carlito est excellent ! Je compte voter Gabriel Attal
 Si vous avez des graines en trop, je prends !
 
 [bibliothecaire]
 Les livres ne se rangent pas tout seuls, vous savez.
-Non on a plus Mein Kampf il va falloir arreter de venir {nom}...
 Chut ! On est dans une bibliothèque… enfin, presque.
-NSM JVAIS LA BRULER LA BIBLIOTHEQUE RRRAAAAAAHHHHHH JVAIS TOUS VOUS BAISER BANDE DE FILS DE PUTE
 J'ai un enchantement qui pourrait vous intéresser.
-Ohla, enchantement caca pipi IV, pas mal non ? C'est français x)
 Savoir, c'est pouvoir. Et le papier, c'est cher.
 
 [cartographe]
 Le monde est bien plus grand qu'on ne le croit.
 J'ai entendu parler d'un manoir perdu dans la forêt sombre…
 Une bonne carte vaut mieux qu'un long détour.
-Une carte pour retrouver votre daron ? Allez vous faire enculer c'est bon.
 
 [clerc]
 Que la lumière vous guide, {joueur}.
-Raphael Glucksman est un bon candidat. vraiment hein. si si je vous jure !! CROYEZ MOI SVP
 J'ai quelques potions… et quelques secrets.
-Est-ce que j'ai déjà fini sur ses photos ? Evidemment enfin
-La vrai gauche... Gnngggnnnn..... VIvE lA fRaNCe.....
+Les morts-vivants ne dorment jamais vraiment.
 
 [armurier]
 Une bonne armure, c'est la moitié de la victoire.
 Mon fourneau ne s'éteint jamais.
-Blaidd ? On a pas. Degagez.
-Vous avez une sale bosse sur votre casque. Trou du cul c'est la honte
-C'est quoi ces trims de golmon, met toi nu et dance. DANCE J'AI DIT
-Ca porte du gucci ou quoi #ILOVEBERNARDARNAUD
+Vous avez une sale bosse sur votre casque.
 
 [forgeron]
-Une épée bien affûtée ne vous trahira jamais. Ma femme si.
+Une épée bien affûtée ne vous trahira jamais.
 Le fer, c'est bien. Le diamant, c'est mieux.
-Je forge ou je Modrinth en vrai... Je plaisante, par rapport au
-J'adore Rubeus le forgeron
-Toi, {nom}, je te baise, je t'atomise la gueule si tu daignes ma parler
-J'ai lustré mon cul de netherite si tu te demandes
-Je forge tout, sauf une relation solide avec mon pere
 
 [outilleur]
 Le bon outil pour le bon travail !
 Une pioche émoussée, c'est une journée perdue.
-Tout le monde s'en fout de moi.... Mon metier est nul.....
-Ne le dis à PERSONNE, mais je compte mettre à feu et à sang {village} très prochainement
 
 [boucher]
 Rien ne vaut un bon ragoût de lapin.
 La viande fraîche, c'est ma fierté.
-J'ai tué plus de 50000 vaches la semaine dernière. A mains nues. J'ai adoré ca putain..
-Tu veux la bouillabaisse de marseille oh putaing la canebiere eh le sud le sud je suis une salope
-I AM THE ONE WHO COOK
 
 [pecheur]
 Ça mord bien, ce matin.
+Une fois, j'ai pêché une botte. Une vraie botte !
 La mer est calme… pour l'instant.
-hmmmm... poisson....
-NGngnggg.... Maqueraux....
-ptn.... une petite truite....
-Ma canne à peche-?! Euh... Disons que- oui peut-etre.... J'ai déjà utlisé ma bite comme canne- >.<
-il me faudrait..... un requin la......
-je vais.... attraper...... une baleine...... la pecher......
-sharknado ? le film ? oui j'adore, si ca arrivait, j'essaiera de pecher tous les requins
 
 [berger]
 Mes moutons sont les plus beaux du royaume.
 Vous voulez de la laine ? J'en ai de toutes les couleurs.
-Vous voulez de la laine ? Hein ? Vous en voulez hein ? Allez la, ALLEZ LA
-salope va
-Mes moutons sah je les kiff bien, leur petite laine la
 
 [maroquinier]
 Le cuir, ça se travaille avec patience.
 Un bon sac de cuir, et vous voilà paré pour l'aventure.
-Tu veux une armure en cuir ? Ca tue non ?
-J'ai une plainte au cul pour apologie du terrorisme
-Trop envie d'aller au Japon
 
 [macon]
 Cette pierre-là, je l'ai taillée moi-même.
 Un mur droit, c'est un village solide.
-Des fois je rempli ma bouche d'argile et je la mache, et puis j'en remet, et puis je remache et apres j'avale
-OUGAH OUGAH CAILLOU CAILLOU
-video de feldup avec sonic et l'argile dans la bouche m'a sexuelement excité
-C'est normal d'aimer les pieds
 
 [archer]
 Des flèches, encore des flèches !
-Il me faudrait plus de plumes... et de silex... et de sex...
-Oui j'aime ce connard de Legolas
-Oui j'aime ce connard de Hawkeye
-Oui j'aime ce connard de Robin des bois
-Oui j'aime ce connard de Charlie Kirk
+Il me faudrait plus de plumes… et de silex.
 
 [niais]
-WE ARE CHARLIE KIRK, WE CARRY THE FLAME
-pipiiii le pipiiii du pipi
-pipi con caca
-Je m'appelle VINCENT CAUSSE
-Je suis un abruti fini, et très conscient il faut le Savoir
-GAGA GOUGOU JE VEUX LE LAIT
-Trefle de plaisanterie
-Ehhhhh, tu seras bien content d'appeler la police si t'as des emmerdes !!!
-J'en détourne de l'argent si tu savais
+…
+Hein ?
+J'ai oublié ce que je voulais dire.
+Vous saviez que l'herbe est verte ?
 
 [sans_emploi]
 Je cherche du travail. Vous auriez un poste pour moi ?
 Il paraît qu'on manque de postes de travail, ici.
-#OpenToWork
-welcometothejungle, indeed, linkeding, hellowork...
-Oui oui je vis des allocs et alors ?? JE T'EMMERDE JE VIS TRES BIEN
+Un jour, je trouverai ma vocation.
 
 [sans_abri]
-Je n'ai même pas de lit où dormir...
+Je n'ai même pas de lit où dormir…
 Vous ne sauriez pas où trouver un lit libre ?
-J'ai accepté ma condition de sans abri, dormir très très surcoté
-EH EH EH, TROUVE MOI UN LIT PAR PITIE PUTAIN
-il fait si froid dehors sans maison........
+Dormir à la belle étoile, ce n'est pas une vie.
 
 [marie]
-{conjoint} m'attend à la maison. Ca va baiser salement cette nuit crois moi.
+{conjoint} m'attend à la maison.
 Avez-vous rencontré {conjoint} ? C'est la plus belle personne du village.
-Mon cœur appartient à {conjoint}. Mon cul est moins exclusif croyer moi.
-{conjoint} baise très mal !! Je suis la pour l'argent de l'héritage principalement.
-
+Mon cœur appartient à {conjoint}.
 
 [veuf]
 Mon conjoint me manque tous les jours…
 La vie continue, il paraît.
-Je ne m'en remetterai jamais que l'on abrege mes souffrances
-Mon conjoint a servi de sacrifice pour Glucksman...
 
 [celibataire]
 Je n'ai pas encore trouvé l'âme sœur.
 Vous connaissez quelqu'un de bien, au village ?
-J'en peux plus de me branler...
-Coeur à prendre !! #OpenToSex
-Tu vas te doucher... Sans moi ? B)
-J'adore les blondes, je vais devoir me taper une chauve au gros nez hein !
 
 [parent]
 Mes enfants grandissent si vite…
 Avez-vous vu mes petits ? Ils ont encore filé.
-Mioches de merde, uniquement pour les allocs hein !
 
 [nuit]
 Il se fait tard, je devrais aller me coucher.
 Vous avez entendu ce bruit ? Rentrez vite !
-La nuit est faite pour faire des trucs sombre, et moi je suis sacrément sombre..
 
 [pluie]
 Quel temps de chien !
 La pluie, c'est bon pour les cultures… mais pas pour moi.
-On est en Bretagne ou quoi ? Je plaisante
