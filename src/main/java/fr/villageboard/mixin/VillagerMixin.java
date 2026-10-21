@@ -60,6 +60,9 @@ public abstract class VillagerMixin {
 	@Inject(method = "customServerAiStep", at = @At("HEAD"))
 	private void villageboard$beforeAi(ServerLevel level, CallbackInfo ci) {
 		villageboard$thinking = (Villager) (Object) this;
+		if (VillageManager.get() != null) {
+			VillageManager.get().onVillagerStep(villageboard$thinking);
+		}
 	}
 
 	@Inject(method = "customServerAiStep", at = @At("RETURN"))

@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
 		"VillagerMixin",
-		"VillagerMakeLoveMixin"
+		"VillagerMakeLoveMixin",
+		"MoveToTargetSinkMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

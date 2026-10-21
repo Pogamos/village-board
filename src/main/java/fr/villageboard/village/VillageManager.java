@@ -97,6 +97,7 @@ public final class VillageManager {
 	private final Map<UUID, String> lastLines = new HashMap<>();
 	private final VillagerActions actions;
 	private final Assignments assignments;
+	private final Roads roads;
 	/** Vrai pendant que le mod change lui-même le métier d'un villageois verrouillé ou lié. */
 	boolean bypassFreeze;
 	private int ticks;
@@ -108,6 +109,7 @@ public final class VillageManager {
 		this.marriages = new Marriages(this);
 		this.actions = new VillagerActions(this, server);
 		this.assignments = new Assignments(this, server);
+		this.roads = new Roads(file.resolveSibling("roads.json"));
 	}
 
 	public static VillageManager get() {
@@ -132,6 +134,7 @@ public final class VillageManager {
 
 	private void load() {
 		genealogy.load();
+		roads.load();
 		if (!Files.exists(file)) {
 			return;
 		}
@@ -154,6 +157,7 @@ public final class VillageManager {
 
 	void save(boolean force) {
 		genealogy.save(force);
+		roads.save(force);
 		if (!force && villages.values().stream().noneMatch(v -> v.dirty)) {
 			return;
 		}
@@ -172,6 +176,7 @@ public final class VillageManager {
 		ticks++;
 		if (ticks % (config.scanIntervalSeconds * 20) == 0) {
 			scan();
+			roads.prune(this, server.overworld().getGameTime());
 		}
 		if (ticks % BOUND_CHECK_TICKS == 0) {
 			assignments.maintain();
@@ -179,7 +184,51 @@ public final class VillageManager {
 		if (ticks % AUTOSAVE_TICKS == 0) {
 			save(false);
 		}
+		if (ticks % 10 == 0) {
+			roads.tickDisplay(this, server.getPlayerList().getPlayers());
+		}
 		actions.tick(ticks);
+	}
+
+	// ------------------------------------------------------------------ chemins du village (voir Roads)
+
+	/** Appelé par le mixin à chaque tick d'un villageois : une fois par seconde, on note où il marche. */
+	public void onVillagerStep(Villager villager) {
+		if (!config.villagePaths || (villager.tickCount + villager.getId()) % Roads.SAMPLE_TICKS != 0
+				|| !(villager.level() instanceof ServerLevel level)) {
+			return;
+		}
+		Village v = index.get(villager.getUUID());
+		if (v != null && v.dimension.equals(dim(level))) {
+			roads.observe(level, villager, v, v.contains(v.dimension, villager.getX(), villager.getZ(), config.defaultRadius));
+		}
+	}
+
+	/**
+	 * Appelé par le mixin quand un villageois calcule son chemin vers une position lointaine : l'étape suivante sur le
+	 * réseau de son village, ou null pour laisser Minecraft chercher seul.
+	 */
+	public BlockPos roadStep(Villager villager, BlockPos target) {
+		if (!config.villagePaths || !(villager.level() instanceof ServerLevel level)) {
+			return null;
+		}
+		Village v = index.get(villager.getUUID());
+		if (v == null || !v.dimension.equals(dim(level))) {
+			return null;
+		}
+		return roads.next(level, villager, v, target);
+	}
+
+	/** Appelé par le mixin : l'étape donnée par {@link #roadStep} est inaccessible. */
+	public void roadFailed(Villager villager) {
+		Village v = index.get(villager.getUUID());
+		if (v != null && villager.level() instanceof ServerLevel level) {
+			roads.failed(level, villager, v);
+		}
+	}
+
+	Roads roads() {
+		return roads;
 	}
 
 	// ------------------------------------------------------------------ recherche
