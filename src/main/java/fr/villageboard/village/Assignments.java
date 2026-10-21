@@ -29,8 +29,11 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Liaisons permanentes d'un villageois à un poste de travail (contrat de travail) ou à un lit (bail de logement).
@@ -60,9 +63,13 @@ final class Assignments {
 
 	private static final double MAX_ASSIGN_DISTANCE = 48;
 	private static final double HOLDER_SEARCH_RADIUS = 64;
+	/** Délai avant de rompre le lien avec un poste cassé (4 minutes). */
+	private static final long SITE_GRACE_TICKS = 4 * 60 * 20;
 
 	private final VillageManager manager;
 	private final MinecraftServer server;
+	/** Villageois dont le poste attitré a disparu, depuis quel tick de jeu (non sauvegardé). */
+	private final Map<UUID, Long> missingSites = new HashMap<>();
 
 	Assignments(VillageManager manager, MinecraftServer server) {
 		this.manager = manager;
@@ -356,8 +363,19 @@ final class Assignments {
 			exists = level.getPoiManager().getType(site.pos()).filter(t -> t.is(PoiTypes.HOME)).isPresent();
 		}
 		if (!exists) {
+			// Poste cassé : on attend 4 minutes avant de rompre le lien, le temps de le reposer au même endroit
+			// (déplacement, remplacement). Le lit attitré, lui, est libéré aussitôt.
+			long now = level.getGameTime();
+			Long since = kind == Kind.WORK ? missingSites.putIfAbsent(villager.getUUID(), now) : null;
+			if (kind == Kind.WORK && now - (since == null ? now : since) < SITE_GRACE_TICKS) {
+				return;
+			}
+			missingSites.remove(villager.getUUID());
 			unbind(villager, kind, true);
 			return;
+		}
+		if (kind == Kind.WORK) {
+			missingSites.remove(villager.getUUID());
 		}
 		boolean atSite = villager.getBrain().getMemory(kind.memory).map(site::equals).orElse(false);
 		boolean rightJob = profession.isEmpty() || villager.getVillagerData().profession().is(profession.get());

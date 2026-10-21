@@ -158,7 +158,8 @@ Un villageois vu hors des bornes pendant 60 s (`leaveDelaySeconds`) est rayé du
 1. Clic droit sur un villageois avec le contrat : il est inscrit dessus.
 2. Clic droit sur un poste de travail (pupitre, composteur…) à moins de 48 blocs : il y est affecté, change de métier
    si besoin (s'il n'a pas encore d'expérience), et l'occupant éventuel est délogé.
-3. Le villageois garde ce poste : s'il le perd de vue, il y est réaffecté. Si le poste est détruit, le lien est rompu
+3. Le villageois garde ce poste : s'il le perd de vue, il y est réaffecté. Si le poste est détruit, le lien est conservé
+   4 minutes, le temps de le reposer au même endroit (déplacement, remplacement) ; passé ce délai, il est rompu
    (annoncé dans la gazette). On peut aussi le libérer depuis sa fiche (« [libérer] »).
 
 Clic droit avec un contrat vierge sur un poste : indique qui l'occupe. Accroupi + clic droit dans le vide : efface le contrat.

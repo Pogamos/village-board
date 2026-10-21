@@ -285,11 +285,8 @@ final class Roads {
 		villager.getNavigation().stop(); // sinon createPath rend le chemin partiel en cours vers la même cible
 		// À 2 blocs près : la cible d'un lit est remontée au-dessus du lit, là où personne ne se tient (Minecraft ne
 		// « l'atteint » jamais, le villageois s'arrête assez près).
-		long t0 = System.nanoTime();
 		net.minecraft.world.level.pathfinder.Path path = FarBeds.longPath(villager, target, Math.max(reachRange, 2), length,
 				EXPLORE_TIERS[trip.explorations - 1]);
-		VillageBoard.LOGGER.info("[roads] exploration x{} {} -> {} : {} en {} µs", EXPLORE_TIERS[trip.explorations - 1], villager.blockPosition(), target,
-				path == null ? null : (path.canReach() ? "OK " : "partiel ") + path.getNodeCount(), (System.nanoTime() - t0) / 1000);
 		return path != null && path.canReach() ? path : null;
 	}
 
@@ -364,17 +361,6 @@ final class Roads {
 		}
 		lastSteps.values().removeIf(s -> now - s.time > SAMPLE_TICKS * 10L);
 		trips.values().removeIf(t -> now - t.lastUse > ABANDON && now > t.pausedUntil);
-	}
-
-	/** DIAGNOSTIC TEMPORAIRE : état du trajet guidé d'un villageois. */
-	String describe(UUID villager, long now) {
-		Trip t = trips.get(villager);
-		if (t == null) {
-			return "-";
-		}
-		return "cible=" + t.target.toShortString() + (now < t.pausedUntil ? " pause=" + (t.pausedUntil - now) : "")
-				+ (t.route != null ? " guidé" : "") + (t.explorations > 0 ? " exploré" + t.explorations : "") + (t.rejected.isEmpty() ? "" : " rejetés=" + t.rejected.size()) + " échecs=" + t.failures
-				+ " reste=" + (t.best == Double.MAX_VALUE ? "?" : (int) t.best) + " vu=" + (now - t.lastUse);
 	}
 
 	void forget(UUID villager) {

@@ -54,7 +54,8 @@ Pièges déjà rencontrés en 26.2 et 26.3 :
     Minecraft n'efface la mémoire `HOME` d'un lit détruit qu'au coucher : `VillageManager.bedExists` vérifie que le lit existe encore.
   - `village/Assignments` : liaisons permanentes à un poste (contrat de travail, attache `BOUND_SITE`, mémoire `JOB_SITE`)
     ou à un lit (bail de logement, attache `BOUND_HOME`, mémoire `HOME`). `maintain()` réinstalle toutes les 2 s
-    les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu. `VillagerActions` : renommer, localiser, verrou, réinitialisation.
+    les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu : aussitôt pour un lit,
+    après 4 minutes pour un poste (`missingSites`, non sauvegardé ; reposé à temps, il est réattribué). `VillagerActions` : renommer, localiser, verrou, réinitialisation.
     Verrou (`LOCKED`) = métier figé + poste et lit attitrés (`lock`/`unlock`) ; sans poste ou sans lit, `maintain()` attitre
     le premier trouvé (`adopt`). Un verrouillé sans emploi peut prendre un métier (`isFrozen`). Verrouillé d'office à la
     naissance et par un contrat ou un bail ; le déverrouillage rompt les deux liens. Le tableau n'affiche que « Libre ».

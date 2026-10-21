@@ -33,54 +33,6 @@ public final class VillageCommand {
 						.then(Commands.literal("info")
 								.then(Commands.argument("id", StringArgumentType.word()).executes(VillageCommand::info)))
 						.then(Commands.literal("paths").executes(VillageCommand::paths))
-						.then(Commands.literal("debugreach")
-								.then(Commands.argument("prefix", StringArgumentType.word())
-										.then(Commands.argument("x", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
-												.then(Commands.argument("y", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
-														.then(Commands.argument("z", com.mojang.brigadier.arguments.IntegerArgumentType.integer()).executes(ctx -> {
-															String prefix = StringArgumentType.getString(ctx, "prefix");
-															net.minecraft.core.BlockPos to = new net.minecraft.core.BlockPos(
-																	com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "x"),
-																	com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "y"),
-																	com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "z"));
-															for (net.minecraft.server.level.ServerLevel level : ctx.getSource().getServer().getAllLevels()) {
-																for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
-																	if (e instanceof net.minecraft.world.entity.npc.villager.Villager v && v.getStringUUID().startsWith(prefix)) {
-																		v.getNavigation().stop();
-																		var p = FarBeds.longPath(v, to, 2, 220, 64);
-																		String r = p == null ? "null" : (p.canReach() ? "ATTEINT " : "PARTIEL ") + p.getNodeCount()
-																				+ " nœuds, fin " + p.getEndNode().asBlockPos().toShortString() + " reste " + (int) p.getDistToTarget();
-																		ctx.getSource().sendSuccess(() -> Component.literal(prefix + " " + v.blockPosition().toShortString() + " -> " + to.toShortString() + " : " + r), false);
-																	}
-																}
-															}
-															return 1;
-														}))))))
-						.then(Commands.literal("debugblocks")
-								.then(Commands.argument("x", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
-										.then(Commands.argument("y", com.mojang.brigadier.arguments.IntegerArgumentType.integer())
-												.then(Commands.argument("z", com.mojang.brigadier.arguments.IntegerArgumentType.integer()).executes(ctx -> {
-													net.minecraft.core.BlockPos c = new net.minecraft.core.BlockPos(
-															com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "x"),
-															com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "y"),
-															com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "z"));
-													var level = ctx.getSource().getServer().overworld();
-													for (net.minecraft.core.BlockPos p : net.minecraft.core.BlockPos.betweenClosed(c.offset(-2, -1, -2), c.offset(2, 2, 2))) {
-														var s = level.getBlockState(p);
-														if (!s.isAir()) {
-															fr.villageboard.VillageBoard.LOGGER.info("[blocks] {} {}", p.toShortString(), s);
-														}
-													}
-													ctx.getSource().sendSuccess(() -> Component.literal("ok"), false);
-													return 1;
-												})))))
-						.then(Commands.literal("debug")
-								.then(Commands.argument("id", StringArgumentType.word()).executes(ctx -> {
-									Village v = VillageManager.get().village(StringArgumentType.getString(ctx, "id"));
-									VillageManager.get().debugVillage(v).forEach(l -> fr.villageboard.VillageBoard.LOGGER.info("[debug] {}", l));
-									ctx.getSource().sendSuccess(() -> Component.literal("ok"), false);
-									return 1;
-								})))
 						.then(Commands.literal("remove")
 								.then(Commands.argument("id", StringArgumentType.word()).executes(VillageCommand::remove)))));
 	}
