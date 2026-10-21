@@ -25,7 +25,7 @@ public final class ModBlocks {
 			.strength(2.5f, 3_600_000f)
 			.sound(SoundType.WOOD)
 			.noOcclusion()
-			.pushReaction(PushReaction.BLOCK));
+			.pushReaction(PushReaction.IMMOVEABLE));
 
 	/** Borne : délimite le territoire du village le plus proche. */
 	public static final Block BOUNDARY_STONE = register("boundary_stone", BoundaryStoneBlock::new, BlockBehaviour.Properties.of()
@@ -34,7 +34,7 @@ public final class ModBlocks {
 			.sound(SoundType.STONE)
 			.requiresCorrectToolForDrops()
 			.noOcclusion()
-			.pushReaction(PushReaction.BLOCK));
+			.pushReaction(PushReaction.IMMOVEABLE));
 
 	private ModBlocks() {
 	}

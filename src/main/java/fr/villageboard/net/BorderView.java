@@ -19,11 +19,11 @@ public record BorderView(String id, String name, String dimension, BlockPos boar
 		buf.writeUtf(dimension);
 		buf.writeBlockPos(board);
 		buf.writeVarInt(radius);
-		buf.writeCollection(polygon, (b, p) -> b.writeBlockPos(p));
+		Lists.write(buf, polygon, (b, p) -> b.writeBlockPos(p));
 	}
 
 	static BorderView read(FriendlyByteBuf buf) {
 		return new BorderView(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBlockPos(), buf.readVarInt(),
-				buf.readList(b -> b.readBlockPos()));
+				Lists.read(buf, b -> b.readBlockPos()));
 	}
 }

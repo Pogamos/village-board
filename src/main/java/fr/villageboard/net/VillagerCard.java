@@ -31,14 +31,14 @@ public record VillagerCard(UUID uuid, String name, String profession, String bio
 		buf.writeBoolean(homeless);
 		buf.writeVarInt(couple);
 		buf.writeUtf(partner);
-		buf.writeCollection(parents, FriendlyByteBuf::writeUtf);
+		Lists.write(buf, parents, FriendlyByteBuf::writeUtf);
 		buf.writeVarInt(children);
 		buf.writeVarInt(siblings);
 	}
 
 	private static VillagerCard read(FriendlyByteBuf buf) {
 		return new VillagerCard(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
-				buf.readVarInt(), buf.readUtf(), buf.readList(FriendlyByteBuf::readUtf), buf.readVarInt(), buf.readVarInt());
+				buf.readVarInt(), buf.readUtf(), Lists.read(buf, FriendlyByteBuf::readUtf), buf.readVarInt(), buf.readVarInt());
 	}
 
 	@Override
