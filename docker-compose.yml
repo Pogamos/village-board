@@ -19,7 +19,7 @@ services:
       # Accepter le CLUF de Minecraft : https://aka.ms/MinecraftEULA
       EULA: "TRUE"
       TYPE: FABRIC
-      VERSION: "26.2"
+      VERSION: "26.3"
       FABRIC_LOADER_VERSION: "0.19.3"
       MODRINTH_PROJECTS: "fabric-api"
       MEMORY: 2G

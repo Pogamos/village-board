@@ -1,6 +1,6 @@
 # Village Board
 
-Mod Fabric (Minecraft 26.2) pour gérer un village peuplé de nombreux villageois, depuis un **tableau de mairie**.
+Mod Fabric (Minecraft 26.3) pour gérer un village peuplé de nombreux villageois, depuis un **tableau de mairie**.
 Le mod s'installe **sur le serveur et sur chaque client**.
 
 ## En jeu
@@ -191,7 +191,7 @@ Les données sont dans `<monde>/villageboard/villages.json` et `family.json` (é
 
 ```powershell
 docker compose run --rm build                     # compile → build/libs/
-$env:MC_OPS="TonPseudo"; docker compose up -d minecraft   # serveur Fabric 26.2 de test
+$env:MC_OPS="TonPseudo"; docker compose up -d minecraft   # serveur Fabric 26.3 de test
 docker compose restart minecraft                  # recharge le mod après une recompilation
 docker exec -it villageboard-fabric rcon-cli      # console du serveur
 ```

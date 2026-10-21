@@ -29,8 +29,8 @@ public final class Payloads {
 	public record Borders(List<BorderView> borders) implements CustomPacketPayload {
 		public static final Type<Borders> TYPE = new Type<>(VillageBoard.id("borders"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, Borders> CODEC = StreamCodec.of(
-				(buf, p) -> buf.writeCollection(p.borders, (b, v) -> v.write(b)),
-				buf -> new Borders(buf.readList(BorderView::read)));
+				(buf, p) -> Lists.write(buf, p.borders, (b, v) -> v.write(b)),
+				buf -> new Borders(Lists.read(buf, BorderView::read)));
 
 		@Override
 		public Type<? extends CustomPacketPayload> type() {

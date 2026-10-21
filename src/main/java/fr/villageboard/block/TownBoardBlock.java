@@ -1,6 +1,5 @@
 package fr.villageboard.block;
 
-import com.mojang.serialization.MapCodec;
 import fr.villageboard.village.VillageManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,7 +31,6 @@ import java.util.Map;
 /** Tableau de la mairie : le poser fonde un village, clic droit pour ouvrir le tableau. */
 public class TownBoardBlock extends HorizontalDirectionalBlock {
 
-	public static final MapCodec<TownBoardBlock> CODEC = simpleCodec(TownBoardBlock::new);
 	public static final EnumProperty<TownBoardPart> PART = EnumProperty.create("part", TownBoardPart.class);
 	private static final Map<Direction, VoxelShape> SHAPES = Shapes.rotateHorizontal(Block.box(0, 0, 0.8, 16, 16, 11));
 
@@ -41,11 +39,6 @@ public class TownBoardBlock extends HorizontalDirectionalBlock {
 		registerDefaultState(stateDefinition.any()
 				.setValue(FACING, Direction.NORTH)
 				.setValue(PART, TownBoardPart.LOWER_LEFT));
-	}
-
-	@Override
-	protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
-		return CODEC;
 	}
 
 	@Override

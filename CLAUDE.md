@@ -1,6 +1,6 @@
 # Village Board
 
-Mod Fabric (client + serveur) pour Minecraft **26.2** : tableau de mairie (gazette, registre des villageois par métier,
+Mod Fabric (client + serveur) pour Minecraft **26.3** : tableau de mairie (gazette, registre des villageois par métier,
 fiche avec renommer / localiser / verrouiller / réinitialiser, besoins, carte du territoire, arbre des familles), bornes
 qui délimitent le territoire, contrat de travail et bail de logement, état civil avec mariages, répliques des villageois
 et fiche au commerce. Le joueur parle français ; l'interface et les messages passent par les fichiers de langue.
@@ -10,7 +10,7 @@ La machine n'a que Java 8 et pas de Gradle. Ne pas lancer `./gradlew` ni `java` 
 
 ```sh
 docker compose run --rm build                 # compile → build/libs/villageboard-<version>.jar
-docker compose up -d minecraft                # serveur Fabric 26.2 de test (loader 0.19.3, comme le serveur du joueur)
+docker compose up -d minecraft                # serveur Fabric 26.3 de test (loader 0.19.3, comme le serveur du joueur)
 docker compose restart minecraft              # recharge le mod après compilation
 docker exec villageboard-fabric rcon-cli "<commande>"
 ```
@@ -22,11 +22,11 @@ docker exec villageboard-fabric rcon-cli "<commande>"
 
 ## Vérifier une API Minecraft / Fabric
 Minecraft 26.x **n'est plus obfusqué** : noms Mojang, pas de mappings. Beaucoup de choses ont changé depuis 1.21, alors
-vérifier les signatures avant d'écrire du code, sans se fier à sa mémoire. Les jars sont dans le volume Docker `villageboard-gradle-cache` :
-`caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-{common,clientonly}-deobf/26.2/*.jar` et
+vérifier les signatures avant d'écrire du code, sans se fier à sa mémoire. Les jars sont dans le volume Docker `villageboard_gradle-cache` :
+`caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-{common,clientonly}-deobf/26.3/*.jar` et
 `caches/modules-2/.../net.fabricmc.fabric-api/*`. Lancer un conteneur `gradle:9-jdk25` qui monte ce volume, puis `javap`.
 
-Pièges déjà rencontrés en 26.2 :
+Pièges déjà rencontrés en 26.2 et 26.3 :
 - `GuiGraphics` n'existe plus : c'est `GuiGraphicsExtractor`. `Screen.render` devient `extractRenderState`, et
   `extractBackground` est dessiné dans une couche en dessous des widgets. Les couleurs de texte et de remplissage sont en **ARGB** :
   sans alpha `0xFF`, elles sont invisibles.
@@ -39,6 +39,9 @@ Pièges déjà rencontrés en 26.2 :
 - Événements d'écran Fabric (`ScreenEvents.afterExtract(screen)`, `remove(screen)`…) : ils sont **recréés à chaque init et à chaque
   `resize`** (`resize` → `repositionElements` → `rebuildWidgets` → `init`). S'y réinscrire dans chaque `AFTER_INIT`, sans garde « déjà fait ».
 - Mixins côté client : classes dans `src/client/java/.../client/mixin`, déclarées dans `villageboard.client.mixins.json` (environnement client).
+- 26.3 : les blocs n'ont plus de codec (ni `codec()` ni `simpleCodec`). `PushReaction` est renommé (`BLOCK` → `IMMOVEABLE`,
+  `NORMAL` → `PUSH_PULL`, `DESTROY` → `POPPED`…). `FriendlyByteBuf` n'a plus `writeCollection`/`readList` : utiliser `net/Lists`.
+  LWJGL/GLFW n'est plus exposé : touches et boutons dans `InputConstants` (`KEY_RETURN`, `KEY_NUMPADENTER`, `MOUSE_BUTTON_LEFT`).
 
 ## Architecture
 - `src/main/java/fr/villageboard/` : code commun.

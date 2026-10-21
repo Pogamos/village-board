@@ -1,6 +1,5 @@
 package fr.villageboard.block;
 
-import com.mojang.serialization.MapCodec;
 import fr.villageboard.village.VillageManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,7 +24,6 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Borne : posée près d'une mairie, elle devient un sommet du polygone qui délimite le village. */
 public class BoundaryStoneBlock extends Block {
 
-	public static final MapCodec<BoundaryStoneBlock> CODEC = simpleCodec(BoundaryStoneBlock::new);
 	public static final EnumProperty<DoubleBlockHalf> HALF = net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
 	private static final VoxelShape LOWER_SHAPE = Block.box(4, 0, 4, 12, 16, 12);
 	private static final VoxelShape UPPER_SHAPE = Block.box(4, 0, 4, 12, 8, 12);
@@ -33,11 +31,6 @@ public class BoundaryStoneBlock extends Block {
 	public BoundaryStoneBlock(Properties properties) {
 		super(properties);
 		registerDefaultState(stateDefinition.any().setValue(HALF, DoubleBlockHalf.LOWER));
-	}
-
-	@Override
-	protected MapCodec<? extends Block> codec() {
-		return CODEC;
 	}
 
 	@Override

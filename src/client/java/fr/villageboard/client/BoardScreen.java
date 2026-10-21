@@ -1,5 +1,6 @@
 package fr.villageboard.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import fr.villageboard.net.BoardView;
 import fr.villageboard.net.BoardView.KinView;
 import fr.villageboard.net.BoardView.VillagerView;
@@ -25,7 +26,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -1102,7 +1102,7 @@ public class BoardScreen extends Screen {
 		}
 		// Barre de défilement : le curseur saisi suit la souris ; un clic à côté du curseur l'y amène.
 		for (Bar bar : List.copyOf(bars)) {
-			if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && bar.contains(event.x(), event.y())) {
+			if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && bar.contains(event.x(), event.y())) {
 				int thumbY = bar.thumbY();
 				boolean onThumb = event.y() >= thumbY && event.y() < thumbY + bar.thumb();
 				dragGrab = onThumb ? (int) event.y() - thumbY : bar.thumb() / 2;
@@ -1178,7 +1178,7 @@ public class BoardScreen extends Screen {
 	@Override
 	public boolean keyPressed(KeyEvent event) {
 		if (renaming && nameBox != null && nameBox.isFocused()
-				&& (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER)) {
+				&& (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER)) {
 			submitRename();
 			return true;
 		}

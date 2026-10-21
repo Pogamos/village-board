@@ -41,22 +41,22 @@ public record BoardView(
 			buf.writeUtf(profession);
 			buf.writeUtf(type);
 			buf.writeBoolean(baby);
-			buf.writeCollection(parents, (b, p) -> b.writeUUID(p));
+			Lists.write(buf, parents, (b, p) -> b.writeUUID(p));
 			buf.writeVarLong(born + 1);
 			buf.writeEnum(fate);
 			buf.writeVarLong(fateDay);
 			buf.writeUtf(village);
 			buf.writeNullable(spouse, (b, p) -> b.writeUUID(p));
 			buf.writeVarLong(marriedDay);
-			buf.writeCollection(divorced, (b, p) -> b.writeUUID(p));
-			buf.writeCollection(widowed, (b, p) -> b.writeUUID(p));
+			Lists.write(buf, divorced, (b, p) -> b.writeUUID(p));
+			Lists.write(buf, widowed, (b, p) -> b.writeUUID(p));
 		}
 
 		static KinView read(FriendlyByteBuf buf) {
 			return new KinView(buf.readUUID(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
-					buf.readList(b -> b.readUUID()), buf.readVarLong() - 1, buf.readEnum(Kin.Fate.class), buf.readVarLong(),
+					Lists.read(buf, b -> b.readUUID()), buf.readVarLong() - 1, buf.readEnum(Kin.Fate.class), buf.readVarLong(),
 					buf.readUtf(), buf.readNullable(b -> b.readUUID()), buf.readVarLong(),
-					buf.readList(b -> b.readUUID()), buf.readList(b -> b.readUUID()));
+					Lists.read(buf, b -> b.readUUID()), Lists.read(buf, b -> b.readUUID()));
 		}
 	}
 
@@ -140,38 +140,38 @@ public record BoardView(
 		buf.writeUtf(founderName);
 		buf.writeBlockPos(board);
 		buf.writeVarInt(defaultRadius);
-		buf.writeCollection(polygon, (b, p) -> b.writeBlockPos(p));
-		buf.writeCollection(news, (b, n) -> {
+		Lists.write(buf, polygon, (b, p) -> b.writeBlockPos(p));
+		Lists.write(buf, news, (b, n) -> {
 			b.writeLong(n.time());
 			b.writeVarLong(n.day());
 			b.writeEnum(n.type());
-			b.writeCollection(n.args(), FriendlyByteBuf::writeUtf);
+			Lists.write(b, n.args(), FriendlyByteBuf::writeUtf);
 		});
-		buf.writeCollection(villagers, (b, v) -> v.write(b));
-		buf.writeCollection(beds, (b, bed) -> {
+		Lists.write(buf, villagers, (b, v) -> v.write(b));
+		Lists.write(buf, beds, (b, bed) -> {
 			b.writeBlockPos(bed.pos());
 			b.writeBoolean(bed.occupied());
 		});
-		buf.writeCollection(workstations, (b, w) -> {
+		Lists.write(buf, workstations, (b, w) -> {
 			b.writeBlockPos(w.pos());
 			b.writeUtf(w.profession());
 			b.writeBoolean(w.occupied());
 		});
 		buf.writeVarInt(bells);
 		buf.writeVarInt(golems);
-		buf.writeCollection(family, (b, k) -> k.write(b));
+		Lists.write(buf, family, (b, k) -> k.write(b));
 	}
 
 	static BoardView read(FriendlyByteBuf buf) {
 		return new BoardView(buf.readUtf(), buf.readUtf(), buf.readVarLong(), buf.readBoolean(), buf.readUtf(),
 				buf.readBlockPos(), buf.readVarInt(),
-				buf.readList(b -> b.readBlockPos()),
-				buf.readList(b -> new NewsEntry(b.readLong(), b.readVarLong(), b.readEnum(NewsType.class), b.readList(FriendlyByteBuf::readUtf))),
-				buf.readList(VillagerView::read),
-				buf.readList(b -> new BedView(b.readBlockPos(), b.readBoolean())),
-				buf.readList(b -> new WorkstationView(b.readBlockPos(), b.readUtf(), b.readBoolean())),
+				Lists.read(buf, b -> b.readBlockPos()),
+				Lists.read(buf, b -> new NewsEntry(b.readLong(), b.readVarLong(), b.readEnum(NewsType.class), Lists.read(b, FriendlyByteBuf::readUtf))),
+				Lists.read(buf, VillagerView::read),
+				Lists.read(buf, b -> new BedView(b.readBlockPos(), b.readBoolean())),
+				Lists.read(buf, b -> new WorkstationView(b.readBlockPos(), b.readUtf(), b.readBoolean())),
 				buf.readVarInt(),
 				buf.readVarInt(),
-				buf.readList(KinView::read));
+				Lists.read(buf, KinView::read));
 	}
 }
