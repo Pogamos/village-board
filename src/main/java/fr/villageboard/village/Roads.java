@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.UUID;
 
@@ -84,6 +85,14 @@ final class Roads {
 	private static final int TRIP_FAILURES = 3;
 	private static final long ABANDON = 6000;
 	private static final int SHOW_RADIUS = 24;
+	/** Exploration : après 5 s d'échec, une fois par destination, un calcul élargi tous les 10 ticks au plus (tout le serveur). */
+	private static final long EXPLORE_AFTER = 100;
+	private static final long EXPLORE_INTERVAL = 10;
+	private static final double EXPLORE_MAX_DISTANCE = 128;
+	/** Budgets successifs (multiples des 768 positions de Minecraft) ; le second, 10 s après, une fois toutes les 2 s au plus. */
+	private static final float[] EXPLORE_TIERS = {8, 32};
+	private static final long EXPLORE_RETRY = 200;
+	private static final long EXPLORE_BIG_INTERVAL = 40;
 
 	private static final Gson GSON = new Gson();
 	private static final Type DATA_TYPE = new TypeToken<LinkedHashMap<String, Saved>>() {
@@ -97,6 +106,8 @@ final class Roads {
 	private final Map<UUID, Trip> trips = new HashMap<>();
 	/** Joueurs qui affichent le réseau (/villageboard paths), jusqu'à quel tick. */
 	private final Map<UUID, Long> viewers = new HashMap<>();
+	private long lastExplore = Long.MIN_VALUE / 2;
+	private long lastBigExplore = Long.MIN_VALUE / 2;
 	private long budgetTick = -1;
 	private int budgetUsed;
 	private boolean dirty;
@@ -134,6 +145,12 @@ final class Roads {
 		} else {
 			lastSteps.put(id, new Step(node, now));
 		}
+	}
+
+	/** A-t-il monté ou descendu deux blocs depuis son dernier relevé ? (relevé aussitôt, dans les escaliers) */
+	boolean climbed(Villager villager) {
+		Step last = lastSteps.get(villager.getUUID());
+		return last != null && villager.onGround() && Math.abs(villager.getBlockY() - last.node.pos.getY()) >= 2;
 	}
 
 	// ------------------------------------------------------------------ itinéraire
@@ -182,10 +199,22 @@ final class Roads {
 			trip.from = from;
 			trip.start = start;
 		}
-		if (start == null || isGoal(start, target)) {
+		if (start == null) {
 			return null;
 		}
-		List<Node> route = net.route(this, start, target, now);
+		if (isGoal(start, target, trip.rejected)) {
+			if (!struggling(villager, now)) {
+				return null; // la destination est à portée : Minecraft y va directement
+			}
+			// Minecraft n'y arrive pas d'ici (dehors, contre le mur du bâtiment) : ce carrefour et ses voisins ne sont pas
+			// de bonnes arrivées pour cette destination, on en cherche une autre.
+			trip.rejected.add(start.id);
+			for (Node n : net.candidates(start.pos, SNAP + 1, 1)) {
+				trip.rejected.add(n.id);
+			}
+		}
+		List<Node> route = trip.rejected.isEmpty() ? net.route(this, start, target, now)
+				: spend(now) ? net.search(start, target, trip.rejected) : null;
 		if (route == null) {
 			return null;
 		}
@@ -217,11 +246,68 @@ final class Roads {
 		return route.get(stepIndex).pos;
 	}
 
+	/**
+	 * Exploration : le réseau ne connaît pas encore de chemin (personne n'a jamais monté cet escalier) et Minecraft
+	 * échoue depuis 5 s. On calcule une fois, pour ce villageois et cette destination, un chemin élargi : s'il y en a un,
+	 * il le suit, et sa marche apprend ce chemin au réseau pour tous les autres. Null sinon (Minecraft cherche seul).
+	 */
+	net.minecraft.world.level.pathfinder.Path explore(ServerLevel level, Villager villager, BlockPos target, int reachRange) {
+		long now = level.getGameTime();
+		if (!struggling(villager, now)) {
+			return null;
+		}
+		double distance = Math.sqrt(villager.blockPosition().distSqr(target));
+		if (distance > EXPLORE_MAX_DISTANCE) {
+			return null;
+		}
+		Trip trip = trips.get(villager.getUUID());
+		if (trip == null || !trip.target.equals(target)) {
+			trip = new Trip(target, now);
+			trips.put(villager.getUUID(), trip);
+		}
+		// Deux paliers : un calcul modéré, puis s'il échoue (relief, bâtiments denses), un calcul large 10 s plus tard.
+		boolean big = trip.explorations == 1;
+		if (trip.explorations >= EXPLORE_TIERS.length || big && now - trip.exploredAt < EXPLORE_RETRY
+				|| now - (big ? lastBigExplore : lastExplore) < (big ? EXPLORE_BIG_INTERVAL : EXPLORE_INTERVAL)) {
+			return null;
+		}
+		trip.explorations++;
+		trip.exploredAt = now;
+		trip.lastUse = now;
+		if (big) {
+			lastBigExplore = now;
+		} else {
+			lastExplore = now;
+		}
+		// Assez de marche pour un détour (3 fois la distance, 96 blocs au moins : la cible peut être juste au-dessus, au
+		// bout de deux escaliers).
+		double length = Math.min(Math.max(distance * 3, 96), EXPLORE_MAX_DISTANCE * 1.5) + 16;
+		villager.getNavigation().stop(); // sinon createPath rend le chemin partiel en cours vers la même cible
+		// À 2 blocs près : la cible d'un lit est remontée au-dessus du lit, là où personne ne se tient (Minecraft ne
+		// « l'atteint » jamais, le villageois s'arrête assez près).
+		long t0 = System.nanoTime();
+		net.minecraft.world.level.pathfinder.Path path = FarBeds.longPath(villager, target, Math.max(reachRange, 2), length,
+				EXPLORE_TIERS[trip.explorations - 1]);
+		VillageBoard.LOGGER.info("[roads] exploration x{} {} -> {} : {} en {} µs", EXPLORE_TIERS[trip.explorations - 1], villager.blockPosition(), target,
+				path == null ? null : (path.canReach() ? "OK " : "partiel ") + path.getNodeCount(), (System.nanoTime() - t0) / 1000);
+		return path != null && path.canReach() ? path : null;
+	}
+
+	/** Minecraft échoue depuis 5 s à atteindre sa cible. */
+	private static boolean struggling(Villager villager, long now) {
+		Optional<Long> since = villager.getBrain().getMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+		return since.isPresent() && now - since.get() >= EXPLORE_AFTER;
+	}
+
 	/** Carrefour d'arrivée possible : à moins de {@link #EXIT_RADIUS} blocs de la destination, à peu près au même niveau. */
 	private static boolean isGoal(Node node, BlockPos target) {
 		int dx = node.pos.getX() - target.getX();
 		int dz = node.pos.getZ() - target.getZ();
 		return dx * dx + dz * dz <= EXIT_RADIUS * EXIT_RADIUS && Math.abs(node.pos.getY() - target.getY()) <= 2;
+	}
+
+	private static boolean isGoal(Node node, BlockPos target, java.util.Set<Integer> rejected) {
+		return isGoal(node, target) && !rejected.contains(node.id);
 	}
 
 	/** L'étape donnée par {@link #next} est inaccessible : ses passages sont suspects, le villageois cherche seul un moment. */
@@ -231,17 +317,23 @@ final class Roads {
 		if (trip == null || trip.route == null || net == null) {
 			return;
 		}
+		// Les hypothèses (liaisons à vue, sens inverse d'un escalier) que personne n'a encore empruntées sont retirées
+		// d'emblée, sans compter contre le trajet : l'itinéraire suivant les évitera. Un passage emprunté a trois essais.
+		boolean guessRemoved = false;
 		for (int i = 1; i < trip.route.size(); i++) {
 			Node from = trip.route.get(i - 1);
 			Edge edge = from.out.get(trip.route.get(i).id);
-			if (edge != null && ++edge.failures >= MAX_FAILURES) {
+			if (edge != null && (edge.uses == 0 || ++edge.failures >= MAX_FAILURES)) {
+				guessRemoved |= edge.uses == 0;
 				from.out.remove(edge.to.id);
 				net.version++;
 				dirty = true;
 			}
 		}
 		trip.route = null;
-		pause(trip, level.getGameTime(), ++trip.failures >= TRIP_FAILURES ? ABANDON : FAILURE_PAUSE);
+		if (!guessRemoved) {
+			pause(trip, level.getGameTime(), ++trip.failures >= TRIP_FAILURES ? ABANDON : FAILURE_PAUSE);
+		}
 	}
 
 	private static void pause(Trip trip, long now, long duration) {
@@ -272,6 +364,17 @@ final class Roads {
 		}
 		lastSteps.values().removeIf(s -> now - s.time > SAMPLE_TICKS * 10L);
 		trips.values().removeIf(t -> now - t.lastUse > ABANDON && now > t.pausedUntil);
+	}
+
+	/** DIAGNOSTIC TEMPORAIRE : état du trajet guidé d'un villageois. */
+	String describe(UUID villager, long now) {
+		Trip t = trips.get(villager);
+		if (t == null) {
+			return "-";
+		}
+		return "cible=" + t.target.toShortString() + (now < t.pausedUntil ? " pause=" + (t.pausedUntil - now) : "")
+				+ (t.route != null ? " guidé" : "") + (t.explorations > 0 ? " exploré" + t.explorations : "") + (t.rejected.isEmpty() ? "" : " rejetés=" + t.rejected.size()) + " échecs=" + t.failures
+				+ " reste=" + (t.best == Double.MAX_VALUE ? "?" : (int) t.best) + " vu=" + (now - t.lastUse);
 	}
 
 	void forget(UUID villager) {
@@ -409,6 +512,11 @@ final class Roads {
 		long pausedUntil;
 		long lastUse;
 		int failures;
+		/** Calculs élargis déjà tentés pour cette destination (voir {@link Roads#explore}), et quand. */
+		int explorations;
+		long exploredAt;
+		/** Carrefours d'où Minecraft n'a pas su finir le trajet : plus des arrivées pour cette destination. */
+		final java.util.Set<Integer> rejected = new java.util.HashSet<>();
 		/** Portion d'itinéraire jusqu'à l'étape donnée (pour noter un échec). */
 		List<Node> route;
 		/** Dernière position de départ cherchée, et le carrefour trouvé (null : aucun). */
@@ -571,13 +679,17 @@ final class Roads {
 
 		/**
 		 * Note un pas de {@code from} à {@code to}. Sur un terrain de même niveau (un bloc d'écart au plus, ce qu'un
-		 * villageois remonte en sautant), le passage vaut dans les deux sens ; une descente plus forte, dans un seul.
-		 * Vrai si un passage est nouveau.
+		 * villageois remonte en sautant), le passage vaut dans les deux sens. Avec plus de dénivelé (un escalier, ou une
+		 * chute), le sens inverse n'est qu'une hypothèse, sans passage compté : confirmée quand quelqu'un l'emprunte,
+		 * retirée au premier échec (voir {@link Roads#failed}). Vrai si un passage est nouveau.
 		 */
 		boolean link(Node from, Node to, long now) {
 			boolean created = linkOneWay(from, to, now);
 			if (Math.abs(from.pos.getY() - to.pos.getY()) <= 1) {
 				created |= linkOneWay(to, from, now);
+			} else if ((from.pos.getX() != to.pos.getX() || from.pos.getZ() != to.pos.getZ()) && !to.out.containsKey(from.id)) {
+				sight(to, from, now);
+				created = true;
 			}
 			return created;
 		}
@@ -609,7 +721,7 @@ final class Roads {
 			if (!roads.spend(now)) {
 				return null;
 			}
-			List<Node> found = search(start, target);
+			List<Node> found = search(start, target, java.util.Set.of());
 			if (routes.size() >= MAX_CACHED_ROUTES) {
 				routes.clear();
 			}
@@ -618,7 +730,7 @@ final class Roads {
 			return found;
 		}
 
-		private List<Node> search(Node start, BlockPos target) {
+		private List<Node> search(Node start, BlockPos target, java.util.Set<Integer> rejected) {
 			Map<Integer, Double> cost = new HashMap<>();
 			Map<Integer, Node> cameFrom = new HashMap<>();
 			PriorityQueue<Open> open = new PriorityQueue<>(Comparator.comparingDouble(Open::f));
@@ -632,7 +744,7 @@ final class Roads {
 				if (current.f > base + heuristic(node, target) + 1e-6) {
 					continue; // entrée périmée de la file
 				}
-				if (isGoal(node, target)) {
+				if (isGoal(node, target, rejected)) {
 					List<Node> route = new ArrayList<>();
 					for (Node n = node; n != null; n = cameFrom.get(n.id)) {
 						route.add(n);

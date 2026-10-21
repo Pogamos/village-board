@@ -192,10 +192,15 @@ public final class VillageManager {
 
 	// ------------------------------------------------------------------ chemins du village (voir Roads)
 
-	/** Appelé par le mixin à chaque tick d'un villageois : une fois par seconde, on note où il marche. */
+	/**
+	 * Appelé par le mixin à chaque tick d'un villageois : une fois par seconde, on note où il marche (et dès qu'il a monté
+	 * ou descendu deux blocs, pour ne pas sauter de marches dans un escalier).
+	 */
 	public void onVillagerStep(Villager villager) {
-		if (!config.villagePaths || (villager.tickCount + villager.getId()) % Roads.SAMPLE_TICKS != 0
-				|| !(villager.level() instanceof ServerLevel level)) {
+		if (!config.villagePaths || !(villager.level() instanceof ServerLevel level)) {
+			return;
+		}
+		if ((villager.tickCount + villager.getId()) % Roads.SAMPLE_TICKS != 0 && !roads.climbed(villager)) {
 			return;
 		}
 		Village v = index.get(villager.getUUID());
@@ -219,6 +224,21 @@ public final class VillageManager {
 		return roads.next(level, villager, v, target);
 	}
 
+	/**
+	 * Appelé par le mixin quand le réseau n'a pas d'étape à proposer : un chemin élargi vers la cible si Minecraft échoue
+	 * depuis un moment (voir {@link Roads#explore}), ou null.
+	 */
+	public net.minecraft.world.level.pathfinder.Path explorePath(Villager villager, BlockPos target, int reachRange) {
+		if (!config.villagePaths || !(villager.level() instanceof ServerLevel level)) {
+			return null;
+		}
+		Village v = index.get(villager.getUUID());
+		if (v == null || !v.dimension.equals(dim(level))) {
+			return null;
+		}
+		return roads.explore(level, villager, target, reachRange);
+	}
+
 	/** Appelé par le mixin : l'étape donnée par {@link #roadStep} est inaccessible. */
 	public void roadFailed(Villager villager) {
 		Village v = index.get(villager.getUUID());
@@ -229,6 +249,63 @@ public final class VillageManager {
 
 	Roads roads() {
 		return roads;
+	}
+
+	/** DIAGNOSTIC TEMPORAIRE : une ligne par villageois chargé du village. */
+	List<String> debugVillage(Village v) {
+		List<String> lines = new ArrayList<>();
+		for (VillagerRecord r : v.villagers.values()) {
+			Villager villager = live(r);
+			if (villager == null) {
+				lines.add(r.uuid.substring(0, 8) + " non chargé");
+				continue;
+			}
+			ServerLevel level = (ServerLevel) villager.level();
+			long now = level.getGameTime();
+			var brain = villager.getBrain();
+			BlockPos at = villager.blockPosition();
+			String home = brain.getMemory(MemoryModuleType.HOME).map(g -> g.pos().toShortString() + " d=" + (int) Math.sqrt(g.pos().distSqr(at))).orElse("aucun");
+			String job = brain.getMemory(MemoryModuleType.JOB_SITE).map(g -> g.pos().toShortString() + " d=" + (int) Math.sqrt(g.pos().distSqr(at))).orElse("aucun");
+			String cant = brain.getMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE).map(s -> String.valueOf(now - s)).orElse("-");
+			String walk = brain.getMemory(MemoryModuleType.WALK_TARGET).map(w -> w.getTarget().currentBlockPosition().toShortString()).orElse("-");
+			String path = brain.getMemory(MemoryModuleType.PATH).map(p -> p.getNodeCount() + (p.canReach() ? "ok" : "partiel")).orElse("-");
+			lines.add(String.format("%s %-12s pos=%s act=%s dort=%s lit=[%s] poste=[%s] bloqué=%s marche=%s chemin=%s réseau=[%s]",
+					r.uuid.substring(0, 8), Professions.key(villager).replace("minecraft:", ""), at.toShortString(),
+					brain.getActiveNonCoreActivity().map(a -> a.getName()).orElse("?"), villager.isSleeping(), home, job, cant, walk, path,
+					roads.describe(villager.getUUID(), now)));
+			if (!cant.equals("-") && Long.parseLong(cant) >= 200) {
+				// Plan des blocs autour (11 × 11, de y-1 à y+2), le villageois au centre (@).
+				for (int dy = -1; dy <= 2; dy++) {
+					StringBuilder layer = new StringBuilder("      y" + (dy >= 0 ? "+" : "") + dy + " ");
+					for (int dz = -5; dz <= 5; dz++) {
+						for (int dx = -5; dx <= 5; dx++) {
+							BlockPos p = at.offset(dx, dy, dz);
+							layer.append(dx == 0 && dz == 0 && dy == 0 ? '@' : glyph(level.getBlockState(p)));
+						}
+						layer.append(' ');
+					}
+					lines.add(layer.toString());
+				}
+			}
+		}
+		return lines;
+	}
+
+	private static char glyph(net.minecraft.world.level.block.state.BlockState s) {
+		String id = s.getBlock().getDescriptionId();
+		if (s.isAir()) return '.';
+		if (!s.getFluidState().isEmpty()) return '~';
+		if (id.contains("door") && !id.contains("trapdoor")) return 'D';
+		if (id.contains("trapdoor")) return 'T';
+		if (id.contains("bed")) return 'B';
+		if (id.contains("stairs")) return 'S';
+		if (id.contains("slab")) return 's';
+		if (id.contains("fence") || id.contains("wall")) return 'F';
+		if (id.contains("glass") || id.contains("pane")) return 'G';
+		if (id.contains("leaves")) return 'L';
+		if (id.contains("ladder") || id.contains("vine") || id.contains("scaffolding")) return 'H';
+		if (id.contains("carpet") || id.contains("torch") || id.contains("lantern") || id.contains("flower") || id.contains("grass") && !id.contains("block")) return ',';
+		return s.isSolid() ? '#' : '?';
 	}
 
 	// ------------------------------------------------------------------ recherche

@@ -20,7 +20,8 @@ import org.spongepowered.asm.mixin.injection.At;
  * fait plutôt viser l'étape suivante sur le réseau de son village : un chemin court, que Minecraft trouve sans peine.
  * Arrivé à l'étape, le villageois recalcule son chemin, ce qui lui donne l'étape d'après. Sa cible ne change pas :
  * il s'arrête dès qu'il l'atteint, et un chemin trouvé jusqu'à l'étape compte comme un progrès (il n'oublie pas son lit
- * en route). Si l'étape est inaccessible, Minecraft cherche le chemin complet comme d'habitude.
+ * en route). Si l'étape est inaccessible, Minecraft cherche le chemin complet comme d'habitude. Si le réseau ne connaît
+ * pas encore de chemin et que Minecraft échoue, un calcul élargi est tenté une fois (exploration, voir Roads).
  */
 @Mixin(MoveToTargetSink.class)
 public abstract class MoveToTargetSinkMixin {
@@ -33,11 +34,17 @@ public abstract class MoveToTargetSinkMixin {
 		if (manager != null && body instanceof Villager villager && walkTarget.getTarget() instanceof BlockPosTracker) {
 			BlockPos step = manager.roadStep(villager, target);
 			if (step != null) {
-				Path path = original.call(navigation, step, reachRange);
+				// À un bloc près : Minecraft remonte d'un cran une cible posée sur une marche, une dalle ou un chemin de terre.
+				Path path = original.call(navigation, step, Math.max(reachRange, 1));
 				if (path != null && path.canReach()) {
 					return path;
 				}
 				manager.roadFailed(villager);
+			} else {
+				Path explored = manager.explorePath(villager, target, reachRange);
+				if (explored != null) {
+					return explored;
+				}
 			}
 		}
 		return original.call(navigation, target, reachRange);

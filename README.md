@@ -142,11 +142,14 @@ Les postes de travail apparaissent aussi sur la carte : libres en cyan, occupés
   (sans lit, la naissance échoue : éclairs au-dessus des parents). Le mod lui fait voir les lits libres **de tout le
   territoire du village**, jusqu'à 140 blocs, à condition qu'il puisse y aller à pied : un lit inaccessible le reste.
   Un sans-abri qui n'a rien trouvé à proximité se voit proposer un lit plus loin au recensement suivant.
-- **Chemins du village** : les villageois retiennent les rues qu'ils empruntent. Quand leur lit ou leur poste est loin,
-  ou de l'autre côté d'un mur, ils suivent ces rues d'étape en étape au lieu de se perdre (sans le mod, un villageois
-  qui ne trouve pas de chemin en une minute oublie son lit ou son poste). Plus une rue est fréquentée, plus elle est
-  préférée : les habitants finissent par passer aux mêmes endroits. Une rue barrée depuis est oubliée après quelques
-  essais. Désactivable avec `"villagePaths": false` dans `config/villageboard.json`.
+- **Chemins du village** : les villageois retiennent les rues, les portes et les escaliers qu'ils empruntent. Quand leur
+  lit ou leur poste est loin, de l'autre côté d'un mur ou à un autre étage, ils suivent ces chemins d'étape en étape au
+  lieu de se perdre (sans le mod, un villageois qui ne trouve pas de chemin en une minute oublie son lit ou son poste).
+  Un escalier monté par quelqu'un sert aussi à descendre. Plus une rue est fréquentée, plus elle est préférée : les
+  habitants finissent par passer aux mêmes endroits. Une rue barrée depuis est oubliée après quelques essais.
+  Le réseau s'apprend en marchant : un escalier que personne n'a jamais pris reste inconnu, il faut qu'un villageois
+  l'ait emprunté au moins une fois (en s'y promenant, ou parce que son lit est en haut). Désactivable avec
+  `"villagePaths": false` dans `config/villageboard.json`.
 
 Les villageois **sans nom** restent anonymes : « Sans nom » dans les listes, « un villageois sans nom » dans la gazette.
 Un villageois vu hors des bornes pendant 60 s (`leaveDelaySeconds`) est rayé du registre et la gazette annonce son départ.
