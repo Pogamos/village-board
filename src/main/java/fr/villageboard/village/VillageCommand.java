@@ -2,10 +2,12 @@ package fr.villageboard.village;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 import java.util.TreeMap;
@@ -13,7 +15,8 @@ import java.util.stream.Collectors;
 
 /**
  * /villageboard list — liste les villages
- * /villageboard info &lt;id&gt; — équipements et population (lits, postes, cloches, golems)
+ * /villageboard info &lt;id&gt; — équipements et population (lits, postes, cloches, golems), chemins appris
+ * /villageboard paths — affiche une minute les chemins du village où l'on se trouve (voir {@link Roads})
  * /villageboard remove &lt;id&gt; — dissout un village (le tableau reste en place)
  * Réservé aux opérateurs : tout le reste se fait en jeu, au tableau et avec les bornes.
  */
@@ -29,6 +32,7 @@ public final class VillageCommand {
 						.then(Commands.literal("list").executes(VillageCommand::list))
 						.then(Commands.literal("info")
 								.then(Commands.argument("id", StringArgumentType.word()).executes(VillageCommand::info)))
+						.then(Commands.literal("paths").executes(VillageCommand::paths))
 						.then(Commands.literal("remove")
 								.then(Commands.argument("id", StringArgumentType.word()).executes(VillageCommand::remove)))));
 	}
@@ -69,6 +73,21 @@ public final class VillageCommand {
 		ctx.getSource().sendSuccess(() -> Component.translatable("villageboard.cmd.info",
 				v.name, v.villagers.size(), homeless, unemployed, beds.size(), freeBeds,
 				stations.size(), freeStations, byJob, Facilities.bells(v), v.golems), false);
+		int[] paths = m.roads().stats(v);
+		ctx.getSource().sendSuccess(() -> Component.translatable("villageboard.cmd.paths_info", paths[0], paths[1], paths[2]), false);
+		return 1;
+	}
+
+	/** Affiche pendant une minute, autour du joueur, le réseau de chemins du village où il se trouve. */
+	private static int paths(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		VillageManager m = VillageManager.get();
+		ServerPlayer player = ctx.getSource().getPlayerOrException();
+		if (m == null || m.villageAt(VillageManager.dim(player.level()), player.getX(), player.getZ()) == null) {
+			ctx.getSource().sendFailure(Component.translatable("villageboard.cmd.paths_none"));
+			return 0;
+		}
+		m.roads().show(player, 60);
+		ctx.getSource().sendSuccess(() -> Component.translatable("villageboard.cmd.paths_shown"), false);
 		return 1;
 	}
 

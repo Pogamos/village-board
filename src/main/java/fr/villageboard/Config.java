@@ -25,6 +25,8 @@ public final class Config {
 	public String managers = "everyone";
 	/** À la fin de sa réplique, un villageois qui a un métier fait le bruit de son travail. */
 	public boolean jobSound = true;
+	/** Les villageois apprennent les chemins du village et s'en servent pour rejoindre un lit ou un poste lointain. */
+	public boolean villagePaths = true;
 
 	private static Config instance = new Config();
 

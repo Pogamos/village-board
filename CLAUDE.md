@@ -54,7 +54,8 @@ Pièges déjà rencontrés en 26.2 et 26.3 :
     Minecraft n'efface la mémoire `HOME` d'un lit détruit qu'au coucher : `VillageManager.bedExists` vérifie que le lit existe encore.
   - `village/Assignments` : liaisons permanentes à un poste (contrat de travail, attache `BOUND_SITE`, mémoire `JOB_SITE`)
     ou à un lit (bail de logement, attache `BOUND_HOME`, mémoire `HOME`). `maintain()` réinstalle toutes les 2 s
-    les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu. `VillagerActions` : renommer, localiser, verrou, réinitialisation.
+    les villageois qui ont perdu leur poste ou leur lit, et rompt le lien si le bloc a disparu : aussitôt pour un lit,
+    après 4 minutes pour un poste (`missingSites`, non sauvegardé ; reposé à temps, il est réattribué). `VillagerActions` : renommer, localiser, verrou, réinitialisation.
     Verrou (`LOCKED`) = métier figé + poste et lit attitrés (`lock`/`unlock`) ; sans poste ou sans lit, `maintain()` attitre
     le premier trouvé (`adopt`). Un verrouillé sans emploi peut prendre un métier (`isFrozen`). Verrouillé d'office à la
     naissance et par un contrat ou un bail ; le déverrouillage rompt les deux liens. Le tableau n'affiche que « Libre ».
@@ -81,6 +82,24 @@ Pièges déjà rencontrés en 26.2 et 26.3 :
     (sans quoi `createPath` s'arrête vers 48 blocs). Utilisé par `mixin/VillagerMakeLoveMixin` quand vanilla ne trouve pas de lit
     (naissance ratée = événement 13, les éclairs), et par `VillageManager.houseHomeless` au recensement pour les sans-abri
     (au 2e recensement sans abri, 2 villageois par village et par recensement au plus).
+  - `village/Roads` : chemins du village (`<monde>/villageboard/roads.json`, option `villagePaths`). Vanilla ne calcule un
+    chemin que sur 48 blocs et 768 nœuds (`setRequiredPathLength(48)`, `FOLLOW_RANGE` de base 16), puis oublie lit ou poste
+    après 1200 ticks de `CANT_REACH_WALK_TARGET_SINCE`. Apprentissage sans calcul de chemin : chaque villageois recensé est
+    relevé une fois par seconde (`VillagerMixin.customServerAiStep` → `onVillagerStep`), et aussitôt qu'il a monté ou
+    descendu 2 blocs (escaliers) ; sa position rejoint le carrefour visible à moins de 3 blocs et 1 bloc de haut (sinon en
+    crée un, relié « à vue » aux carrefours visibles à 8 blocs), son pas devient un passage (dans les deux sens si 1 bloc
+    d'écart au plus ; sinon le sens inverse est une hypothèse). Les hypothèses (`uses == 0` : liaisons à vue, sens inverse
+    d'un escalier) sont retirées au premier échec ; un passage emprunté a 3 essais. Guidage : `mixin/MoveToTargetSinkMixin`
+    enveloppe le `createPath` de `tryComputePath` ; pour une cible fixe à 24 blocs ou plus, ou que vanilla n'atteint pas,
+    A* sur le réseau vers un carrefour à 12 blocs de la cible (cache partagé par carrefour de départ + cible, 16 calculs par
+    tick au plus) et le villageois vise l'étape à ~20 blocs, **à 1 bloc près** (`GroundPathNavigation.findSurfacePosition`
+    remonte d'un cran une cible posée sur un chemin de terre, une marche, une dalle ou un lit). Un chemin trouvé jusqu'à
+    l'étape efface `CANT_REACH` : d'où l'abandon (5 min) après 30 s sans progrès ou 3 étapes inaccessibles, pour que vanilla
+    puisse encore oublier une cible vraiment inaccessible. Sans itinéraire et après 5 s d'échec, une exploration :
+    `FarBeds.longPath` (portée élargie, 8 fois plus de nœuds, à 2 blocs près), une fois par villageois et destination,
+    tous les 10 ticks au plus ; inefficace quand la cible est juste au-dessus et que le départ est un grand espace ouvert
+    (l'A* vanilla le parcourt en entier avant l'escalier). Passages oubliés après une semaine de jeu sans usage.
+    `/villageboard paths` les affiche en particules.
   - `mixin/VillagerMixin` : intercepte `setVillagerData`, ce qui donne les actualités de métier et bloque les changements de métier
     des villageois verrouillés ou liés (`isFrozen`, contourné par `bypassFreeze`), ainsi que `getBreedOffspring` (naissances).
   - `net/` : `OpenBoard` (vue complète du tableau), `Borders` (limites pour tous les clients), `BoardAction` (client → serveur).
@@ -102,7 +121,12 @@ Pas de tests automatisés. On vérifie sur le serveur de test via RCON :
 - poser les bornes avec `setblock` et invoquer des villageois ;
 - lire les actualités dans le JSON après `docker compose stop minecraft`.
 
-`/villageboard info <id>` résume ce que le serveur a relevé (lits, postes, cloches, golems, sans-abri, sans-emploi).
+`/villageboard info <id>` résume ce que le serveur a relevé (lits, postes, cloches, golems, sans-abri, sans-emploi,
+carrefours et passages appris).
+Chemins : un villageois n'est relevé qu'une fois recensé (scan toutes les 10 s) ; pour amorcer un réseau, le téléporter
+pas à pas (`tp` de 2 blocs, d'1 bloc dans les escaliers, à y + 0,5 sur les marches). Témoin sans le mod : `"villagePaths": false`
+dans `server-data/config/villageboard.json` puis redémarrage. Sous PowerShell, les guillemets du NBT de `summon` sont
+mangés : invoquer depuis Git Bash. Mémoire du lit à l'invocation : `{Brain:{memories:{"minecraft:home":{value:{pos:[I;x,y,z],dimension:"minecraft:overworld"}}}}}`.
 Sans joueur connecté, le serveur se fige au bout de `pause-when-empty-seconds` (mis à 0 dans `server-data/server.properties`) :
 sinon les villageois ne bougent pas pendant les tests RCON.
 Pour simuler un verrou ou une liaison : `data merge entity ... {"fabric:attachments":{"villageboard:locked":1b}}`.

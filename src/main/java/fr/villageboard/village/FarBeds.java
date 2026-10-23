@@ -75,19 +75,28 @@ final class FarBeds {
 
 	/** Un chemin mène-t-il du villageois jusqu'au lit ? Calcul de chemin élargi à la distance du lit. */
 	private static boolean reachable(Villager villager, BlockPos bed) {
+		Path path = longPath(villager, bed, BED_ACCURACY, Math.sqrt(bed.distSqr(villager.blockPosition())) + 16, 1);
+		return path != null && path.canReach();
+	}
+
+	/**
+	 * Calcul de chemin élargi : jusqu'à {@code length} blocs de marche (au lieu de 48) et {@code nodesMultiplier} fois
+	 * plus de positions explorées (768 sinon). Sert aussi à l'exploration des chemins du village ({@link Roads}).
+	 */
+	static Path longPath(Villager villager, BlockPos target, int accuracy, double length, float nodesMultiplier) {
 		AttributeInstance range = villager.getAttribute(Attributes.FOLLOW_RANGE);
 		if (range == null) {
-			return false;
+			return null;
 		}
-		double needed = Math.sqrt(bed.distSqr(villager.blockPosition())) + 16;
-		double extra = needed - range.getValue();
+		double extra = length - range.getValue();
 		if (extra > 0) {
 			range.addTransientModifier(new AttributeModifier(PATH_RANGE, extra, AttributeModifier.Operation.ADD_VALUE));
 		}
+		villager.getNavigation().setMaxVisitedNodesMultiplier(nodesMultiplier);
 		try {
-			Path path = villager.getNavigation().createPath(bed, BED_ACCURACY);
-			return path != null && path.canReach();
+			return villager.getNavigation().createPath(target, accuracy);
 		} finally {
+			villager.getNavigation().resetMaxVisitedNodesMultiplier();
 			if (extra > 0) {
 				range.removeModifier(PATH_RANGE);
 			}

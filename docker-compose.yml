@@ -24,6 +24,8 @@ services:
       MODRINTH_PROJECTS: "fabric-api"
       MEMORY: 2G
       DIFFICULTY: normal
+      # Monde chargé (dossier dans server-data) : MC_LEVEL=<dossier> docker compose up -d minecraft
+      LEVEL: ${MC_LEVEL:-world}
       # Ton pseudo Minecraft pour être opérateur (ou : docker exec villageboard-fabric rcon-cli op <pseudo>)
       OPS: ${MC_OPS:-}
     volumes:
