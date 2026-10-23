@@ -10,6 +10,13 @@
 		"top_top": "villageboard:block/boundary_stone_top_top",
 		"stone_alt": "villageboard:block/boundary_stone_stone_alt"
 	},
+	"display": {
+		"gui": {
+			"rotation": [30, 225, 0],
+			"translation": [0, -1.25, 0],
+			"scale": [0.625, 0.625, 0.625]
+		}
+	},
 	"elements": [
 		{
 			"name": "bottom",

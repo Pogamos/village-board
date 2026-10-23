@@ -2,9 +2,21 @@
   "type": "minecraft:block",
   "pools": [
     {
-      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
-      "entries": [ { "type": "minecraft:item", "name": "villageboard:town_board" } ],
-      "rolls": 1.0
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "villageboard:town_board",
+          "condition": {
+            "type": "minecraft:match_block",
+            "blocks": "villageboard:town_board",
+            "state": { "part": "lower_left" }
+          }
+        }
+      ],
+      "rolls": 1
     }
   ],
   "random_sequence": "villageboard:blocks/town_board"

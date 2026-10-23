@@ -2,9 +2,21 @@
   "type": "minecraft:block",
   "pools": [
     {
-      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
-      "entries": [ { "type": "minecraft:item", "name": "villageboard:boundary_stone" } ],
-      "rolls": 1.0
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "villageboard:boundary_stone",
+          "condition": {
+            "type": "minecraft:match_block",
+            "blocks": "villageboard:boundary_stone",
+            "state": { "half": "lower" }
+          }
+        }
+      ],
+      "rolls": 1
     }
   ],
   "random_sequence": "villageboard:blocks/boundary_stone"
